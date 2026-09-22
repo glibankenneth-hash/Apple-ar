@@ -3,7 +3,8 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
     <title>Apple AR</title>
 
@@ -19,10 +20,30 @@
             overflow: hidden;
             touch-action: none;
         }
+
+        #permissionButton {
+            position: fixed;
+            z-index: 9999;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            padding: 16px 22px;
+            border: none;
+            border-radius: 10px;
+            background: white;
+            color: black;
+            font-size: 16px;
+            font-weight: bold;
+            display: none;
+        }
     </style>
 </head>
 
 <body>
+
+<button id="permissionButton">
+    Enable Motion
+</button>
 
 <a-scene
     mindar-image="imageTargetSrc: ./targets.mind; autoStart: true;"
@@ -43,16 +64,21 @@
         look-controls="enabled: false">
     </a-camera>
 
-    <a-entity mindar-image-target="targetIndex: 0">
+    <a-entity
+        id="target"
+        mindar-image-target="targetIndex: 0">
 
-        <a-gltf-model
-            id="apple"
-            class="interactive-apple"
-            src="#appleModel"
-            position="0 0 0"
-            rotation="-90 0 0"
-            scale="2 2 2">
-        </a-gltf-model>
+        <a-entity id="uprightContainer">
+
+            <a-gltf-model
+                id="apple"
+                src="#appleModel"
+                position="0 0 0"
+                rotation="0 0 0"
+                scale="0.5 0.5 0.5">
+            </a-gltf-model>
+
+        </a-entity>
 
     </a-entity>
 
@@ -61,8 +87,18 @@
 
 <script>
 
-const apple = document.querySelector("#apple");
 const scene = document.querySelector("a-scene");
+const target = document.querySelector("#target");
+const container = document.querySelector("#uprightContainer");
+const apple = document.querySelector("#apple");
+
+const permissionButton =
+    document.querySelector("#permissionButton");
+
+
+// ======================================================
+// APPLE INTERACTION
+// ======================================================
 
 let rotating = false;
 let lastX = 0;
@@ -71,255 +107,524 @@ let initialPinchDistance = null;
 let initialScale = 0.5;
 
 
-// Wait until A-Frame is ready
-scene.addEventListener("loaded", () => {
+// ======================================================
+// DEVICE ORIENTATION
+// ======================================================
 
-    const canvas = scene.canvas;
+let deviceAlpha = 0;
+let deviceBeta = 0;
+let deviceGamma = 0;
 
-    // --------------------------------------------------
-    // GET SCREEN POSITION
-    // --------------------------------------------------
+let motionPermissionGranted = false;
 
-    function getPointerPosition(event) {
 
-        const rect = canvas.getBoundingClientRect();
+// ------------------------------------------------------
+// REQUEST MOTION PERMISSION
+// ------------------------------------------------------
 
-        let clientX;
-        let clientY;
+async function requestMotionPermission() {
 
-        if (event.touches && event.touches.length > 0) {
-            clientX = event.touches[0].clientX;
-            clientY = event.touches[0].clientY;
+    try {
+
+        if (
+            typeof DeviceOrientationEvent !== "undefined" &&
+            typeof DeviceOrientationEvent.requestPermission === "function"
+        ) {
+
+            const permission =
+                await DeviceOrientationEvent.requestPermission();
+
+            if (permission === "granted") {
+
+                motionPermissionGranted = true;
+
+                window.addEventListener(
+                    "deviceorientation",
+                    handleOrientation,
+                    true
+                );
+
+                permissionButton.style.display = "none";
+            }
+
         } else {
-            clientX = event.clientX;
-            clientY = event.clientY;
+
+            motionPermissionGranted = true;
+
+            window.addEventListener(
+                "deviceorientation",
+                handleOrientation,
+                true
+            );
+
+            permissionButton.style.display = "none";
         }
 
-        return {
-            x: ((clientX - rect.left) / rect.width) * 2 - 1,
-            y: -((clientY - rect.top) / rect.height) * 2 + 1
-        };
-    }
+    } catch (error) {
 
-
-    // --------------------------------------------------
-    // CHECK IF USER TOUCHED THE APPLE
-    // --------------------------------------------------
-
-    function isAppleTouched(event) {
-
-        if (!apple.object3D) {
-            return false;
-        }
-
-        const pointer = getPointerPosition(event);
-
-        const camera = scene.camera;
-
-        const raycaster = new THREE.Raycaster();
-
-        raycaster.setFromCamera(
-            new THREE.Vector2(pointer.x, pointer.y),
-            camera
+        console.log(
+            "Motion permission error:",
+            error
         );
 
-        const objects = [];
+    }
+}
 
-        apple.object3D.traverse(function(object) {
+
+permissionButton.addEventListener(
+    "click",
+    requestMotionPermission
+);
+
+
+// ======================================================
+// DEVICE ORIENTATION SENSOR
+// ======================================================
+
+function handleOrientation(event) {
+
+    if (event.alpha !== null) {
+        deviceAlpha = event.alpha;
+    }
+
+    if (event.beta !== null) {
+        deviceBeta = event.beta;
+    }
+
+    if (event.gamma !== null) {
+        deviceGamma = event.gamma;
+    }
+
+}
+
+
+// ======================================================
+// START MOTION SENSOR
+// ======================================================
+
+function setupMotion() {
+
+    if (
+        typeof DeviceOrientationEvent !== "undefined" &&
+        typeof DeviceOrientationEvent.requestPermission === "function"
+    ) {
+
+        permissionButton.style.display = "block";
+
+    } else {
+
+        window.addEventListener(
+            "deviceorientation",
+            handleOrientation,
+            true
+        );
+
+        motionPermissionGranted = true;
+    }
+
+}
+
+
+// ======================================================
+// FIND SCREEN POSITION
+// ======================================================
+
+function getPointerPosition(event) {
+
+    const canvas = scene.canvas;
+    const rect = canvas.getBoundingClientRect();
+
+    let clientX;
+    let clientY;
+
+    if (
+        event.touches &&
+        event.touches.length > 0
+    ) {
+
+        clientX = event.touches[0].clientX;
+        clientY = event.touches[0].clientY;
+
+    } else {
+
+        clientX = event.clientX;
+        clientY = event.clientY;
+
+    }
+
+    return {
+
+        x:
+            ((clientX - rect.left) /
+            rect.width) * 2 - 1,
+
+        y:
+            -((clientY - rect.top) /
+            rect.height) * 2 + 1
+
+    };
+
+}
+
+
+// ======================================================
+// CHECK WHETHER APPLE WAS TOUCHED
+// ======================================================
+
+function isAppleTouched(event) {
+
+    if (!apple.object3D) {
+        return false;
+    }
+
+    const pointer =
+        getPointerPosition(event);
+
+    const camera =
+        scene.camera;
+
+    const raycaster =
+        new THREE.Raycaster();
+
+    raycaster.setFromCamera(
+        new THREE.Vector2(
+            pointer.x,
+            pointer.y
+        ),
+        camera
+    );
+
+    const objects = [];
+
+    apple.object3D.traverse(
+        function(object) {
 
             if (object.isMesh) {
                 objects.push(object);
             }
 
-        });
+        }
+    );
 
-        const intersections = raycaster.intersectObjects(objects, true);
+    const intersections =
+        raycaster.intersectObjects(
+            objects,
+            true
+        );
 
-        return intersections.length > 0;
+    return intersections.length > 0;
+
+}
+
+
+// ======================================================
+// TOUCH START
+// ======================================================
+
+function touchStart(event) {
+
+    // TWO FINGERS
+    if (event.touches.length === 2) {
+
+        event.preventDefault();
+
+        const dx =
+            event.touches[0].clientX -
+            event.touches[1].clientX;
+
+        const dy =
+            event.touches[0].clientY -
+            event.touches[1].clientY;
+
+        initialPinchDistance =
+            Math.sqrt(
+                dx * dx + dy * dy
+            );
+
+        initialScale =
+            apple.object3D.scale.x;
+
+        rotating = false;
+
+        return;
     }
 
 
-    // --------------------------------------------------
-    // TOUCH START
-    // --------------------------------------------------
-
-    canvas.addEventListener("touchstart", function(event) {
-
-        // TWO FINGERS = PINCH
-        if (event.touches.length === 2) {
-
-            event.preventDefault();
-
-            const dx =
-                event.touches[0].clientX -
-                event.touches[1].clientX;
-
-            const dy =
-                event.touches[0].clientY -
-                event.touches[1].clientY;
-
-            initialPinchDistance = Math.sqrt(
-                dx * dx + dy * dy
-            );
-
-            initialScale = apple.object3D.scale.x;
-
-            rotating = false;
-
-            return;
-        }
-
-
-        // ONE FINGER = ROTATE
-        if (event.touches.length === 1) {
-
-            if (isAppleTouched(event)) {
-
-                event.preventDefault();
-
-                rotating = true;
-
-                lastX = event.touches[0].clientX;
-            }
-        }
-
-    }, { passive: false });
-
-
-    // --------------------------------------------------
-    // TOUCH MOVE
-    // --------------------------------------------------
-
-    canvas.addEventListener("touchmove", function(event) {
-
-        // TWO FINGER PINCH
-        if (
-            event.touches.length === 2 &&
-            initialPinchDistance !== null
-        ) {
-
-            event.preventDefault();
-
-            const dx =
-                event.touches[0].clientX -
-                event.touches[1].clientX;
-
-            const dy =
-                event.touches[0].clientY -
-                event.touches[1].clientY;
-
-            const currentDistance = Math.sqrt(
-                dx * dx + dy * dy
-            );
-
-            const scaleFactor =
-                currentDistance / initialPinchDistance;
-
-            let newScale =
-                initialScale * scaleFactor;
-
-            // Limit the size
-            newScale = Math.max(
-                0.15,
-                Math.min(2.0, newScale)
-            );
-
-            apple.object3D.scale.set(
-                newScale,
-                newScale,
-                newScale
-            );
-
-            return;
-        }
-
-
-        // ONE FINGER ROTATION
-        if (
-            event.touches.length === 1 &&
-            rotating
-        ) {
-
-            event.preventDefault();
-
-            const currentX =
-                event.touches[0].clientX;
-
-            const movement =
-                currentX - lastX;
-
-            // Rotation sensitivity
-            apple.object3D.rotation.y -= movement * 0.01;
-
-            lastX = currentX;
-        }
-
-    }, { passive: false });
-
-
-    // --------------------------------------------------
-    // TOUCH END
-    // --------------------------------------------------
-
-    canvas.addEventListener("touchend", function(event) {
-
-        if (event.touches.length === 0) {
-
-            rotating = false;
-            initialPinchDistance = null;
-
-        }
-
-    });
-
-
-    // --------------------------------------------------
-    // MOUSE DRAG FOR PC TESTING
-    // --------------------------------------------------
-
-    canvas.addEventListener("mousedown", function(event) {
+    // ONE FINGER
+    if (event.touches.length === 1) {
 
         if (isAppleTouched(event)) {
 
+            event.preventDefault();
+
             rotating = true;
 
-            lastX = event.clientX;
+            lastX =
+                event.touches[0].clientX;
 
         }
 
-    });
+    }
+
+}
 
 
-    canvas.addEventListener("mousemove", function(event) {
+// ======================================================
+// TOUCH MOVE
+// ======================================================
 
-        if (!rotating) {
-            return;
-        }
+function touchMove(event) {
+
+    // PINCH
+    if (
+        event.touches.length === 2 &&
+        initialPinchDistance !== null
+    ) {
+
+        event.preventDefault();
+
+        const dx =
+            event.touches[0].clientX -
+            event.touches[1].clientX;
+
+        const dy =
+            event.touches[0].clientY -
+            event.touches[1].clientY;
+
+        const currentDistance =
+            Math.sqrt(
+                dx * dx + dy * dy
+            );
+
+        const scaleFactor =
+            currentDistance /
+            initialPinchDistance;
+
+        let newScale =
+            initialScale *
+            scaleFactor;
+
+        newScale =
+            Math.max(
+                0.15,
+                Math.min(
+                    2.0,
+                    newScale
+                )
+            );
+
+        apple.object3D.scale.set(
+            newScale,
+            newScale,
+            newScale
+        );
+
+        return;
+    }
+
+
+    // ROTATE
+    if (
+        event.touches.length === 1 &&
+        rotating
+    ) {
+
+        event.preventDefault();
+
+        const currentX =
+            event.touches[0].clientX;
 
         const movement =
-            event.clientX - lastX;
+            currentX - lastX;
 
-        apple.object3D.rotation.y -= movement * 0.01;
+        apple.object3D.rotation.y -=
+            movement * 0.01;
+
+        lastX = currentX;
+
+    }
+
+}
+
+
+// ======================================================
+// TOUCH END
+// ======================================================
+
+function touchEnd(event) {
+
+    if (event.touches.length === 0) {
+
+        rotating = false;
+
+        initialPinchDistance = null;
+
+    }
+
+}
+
+
+// ======================================================
+// MOUSE CONTROL FOR PC
+// ======================================================
+
+function mouseDown(event) {
+
+    if (isAppleTouched(event)) {
+
+        rotating = true;
 
         lastX = event.clientX;
 
-    });
+    }
+
+}
 
 
-    canvas.addEventListener("mouseup", function() {
+function mouseMove(event) {
 
-        rotating = false;
+    if (!rotating) {
+        return;
+    }
 
-    });
+    const movement =
+        event.clientX - lastX;
+
+    apple.object3D.rotation.y -=
+        movement * 0.01;
+
+    lastX = event.clientX;
+
+}
 
 
-    canvas.addEventListener("mouseleave", function() {
+function mouseUp() {
 
-        rotating = false;
+    rotating = false;
 
-    });
+}
 
-});
+
+// ======================================================
+// APPLY UPRIGHT COMPENSATION
+// ======================================================
+
+function updateUprightOrientation() {
+
+    if (!motionPermissionGranted) {
+        return;
+    }
+
+    /*
+       The target itself follows the physical image.
+
+       The container receives a correction based on the
+       device's pitch and roll so the Apple remains
+       visually upright relative to gravity.
+    */
+
+    let pitch =
+        deviceBeta;
+
+    let roll =
+        deviceGamma;
+
+
+    // Convert to radians
+    pitch =
+        pitch * Math.PI / 180;
+
+    roll =
+        roll * Math.PI / 180;
+
+
+    /*
+       Apply pitch/roll compensation.
+
+       The exact response depends on the phone's physical
+       orientation, so keep this separate from the Apple
+       rotation itself.
+    */
+
+    container.object3D.rotation.x =
+        -pitch;
+
+    container.object3D.rotation.z =
+        -roll;
+
+}
+
+
+// ======================================================
+// START EVERYTHING
+// ======================================================
+
+scene.addEventListener(
+    "loaded",
+    function() {
+
+        setupMotion();
+
+        const canvas =
+            scene.canvas;
+
+
+        canvas.addEventListener(
+            "touchstart",
+            touchStart,
+            { passive: false }
+        );
+
+        canvas.addEventListener(
+            "touchmove",
+            touchMove,
+            { passive: false }
+        );
+
+        canvas.addEventListener(
+            "touchend",
+            touchEnd,
+            { passive: false }
+        );
+
+
+        canvas.addEventListener(
+            "mousedown",
+            mouseDown
+        );
+
+        canvas.addEventListener(
+            "mousemove",
+            mouseMove
+        );
+
+        canvas.addEventListener(
+            "mouseup",
+            mouseUp
+        );
+
+        canvas.addEventListener(
+            "mouseleave",
+            mouseUp
+        );
+
+
+        // Continuously update upright orientation
+
+        function animate() {
+
+            updateUprightOrientation();
+
+            requestAnimationFrame(
+                animate
+            );
+
+        }
+
+        animate();
+
+    }
+);
 
 </script>
 
