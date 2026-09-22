@@ -2,74 +2,60 @@
 <html>
 <head>
 
-    <meta charset="UTF-8">
+<meta charset="UTF-8">
 
-    <meta name="viewport"
-          content="width=device-width,
-                   initial-scale=1.0,
-                   maximum-scale=1.0,
-                   user-scalable=no">
+<meta name="viewport"
+      content="width=device-width,
+               initial-scale=1.0,
+               maximum-scale=1.0,
+               user-scalable=no">
 
-    <title>Apple AR</title>
+<title>Apple AR</title>
 
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<style>
 
-    <style>
+html,
+body {
+    margin: 0;
+    padding: 0;
 
-        html,
-        body {
+    width: 100%;
+    height: 100%;
 
-            margin: 0;
-            padding: 0;
+    overflow: hidden;
 
-            width: 100%;
-            height: 100%;
+    touch-action: none;
+}
 
-            overflow: hidden;
+a-scene {
+    width: 100%;
+    height: 100%;
+}
 
-            touch-action: none;
-
-        }
-
-        a-scene {
-
-            width: 100%;
-            height: 100%;
-
-        }
-
-    </style>
+</style>
 
 </head>
 
-
 <body>
 
-
 <a-scene
-
     mindar-image="
         imageTargetSrc: ./targets.mind;
         autoStart: true;
         filterMinCF: 0.0001;
         filterBeta: 0.01;
     "
-
     color-space="sRGB"
-
     renderer="
         colorManagement: true;
         antialias: true;
     "
-
     vr-mode-ui="enabled: false"
-
     device-orientation-permission-ui="enabled: false"
-
     embedded>
-
 
     <a-assets>
 
@@ -80,50 +66,33 @@
 
     </a-assets>
 
-
     <a-camera
-
         position="0 0 0"
-
         look-controls="enabled: false">
-
     </a-camera>
-
 
     <a-entity
         id="imageTarget"
         mindar-image-target="targetIndex: 0">
 
-
         <a-entity id="appleContainer">
 
-
             <a-gltf-model
-
                 id="apple"
-
                 src="#appleModel"
-
                 position="0 0 0"
-
                 rotation="0 0 0"
-
                 scale="1 1 1">
-
             </a-gltf-model>
-
 
         </a-entity>
 
-
     </a-entity>
-
 
 </a-scene>
 
 
 <script>
-
 
 /* =========================================================
    ELEMENTS
@@ -144,21 +113,18 @@ const appleContainer =
 ========================================================= */
 
 const MIN_SCALE = 0.3;
-
 const MAX_SCALE = 3.0;
 
 
 /*
-    Rotation sensitivity.
-
-    Higher = faster rotation.
+    Higher value = faster 3D rotation.
 */
 
-const ROTATION_SPEED = 2.5;
+const ROTATION_SPEED = 1.8;
 
 
 /* =========================================================
-   ORIENTATION STATE
+   TARGET ORIENTATION
 ========================================================= */
 
 let currentMode = "vertical";
@@ -175,51 +141,50 @@ const FLOOR_THRESHOLD = 0.25;
 
 
 /* =========================================================
-   THREE.JS TEMP OBJECTS
+   THREE.JS OBJECTS
 ========================================================= */
 
 const targetQuaternion =
     new THREE.Quaternion();
 
-const worldUp =
-    new THREE.Vector3(0, 1, 0);
-
 const targetNormal =
     new THREE.Vector3(0, 0, 1);
+
+const worldUp =
+    new THREE.Vector3(0, 1, 0);
 
 const rotatedNormal =
     new THREE.Vector3();
 
 
-/* =========================================================
-   FREE ROTATION
-========================================================= */
-
 /*
-    Instead of storing X/Y/Z Euler angles, we maintain
-    a quaternion.
-
-    This allows the Apple to rotate freely in any direction.
+    User's complete 3D rotation.
 */
 
 const userQuaternion =
     new THREE.Quaternion();
 
 
-const dragQuaternion =
+/*
+    Final rotation applied to Apple.
+*/
+
+const finalQuaternion =
     new THREE.Quaternion();
 
 
-const axis =
-    new THREE.Vector3();
+/*
+    Floor correction.
+*/
 
-
-const rotationX =
+const floorQuaternion =
     new THREE.Quaternion();
 
 
-const rotationY =
-    new THREE.Quaternion();
+floorQuaternion.setFromAxisAngle(
+    new THREE.Vector3(1, 0, 0),
+    THREE.MathUtils.degToRad(-90)
+);
 
 
 /* =========================================================
@@ -234,33 +199,282 @@ let initialPinchDistance = null;
 
 
 /* =========================================================
-   MOUSE
+   POINTER TRACKING
 ========================================================= */
 
-let mouseDown = false;
+/*
+    Pointer events are used instead of separate mouse/touch
+    rotation systems.
 
-let mouseX = 0;
+    This makes the exact same 3D trackball work on:
 
-let mouseY = 0;
+    - phone
+    - tablet
+    - mouse
+    - touchscreen PC
+*/
+
+const pointers = new Map();
+
+let activeRotationPointer = null;
+
+let previousTrackballVector = null;
 
 
 /* =========================================================
-   TOUCH
+   TRACKBALL VECTOR
 ========================================================= */
 
-let touchRotating = false;
+function getTrackballVector(clientX, clientY) {
 
-let touchX = 0;
+    const width =
+        window.innerWidth;
 
-let touchY = 0;
+    const height =
+        window.innerHeight;
+
+
+    /*
+        Convert screen coordinates to:
+
+        X = -1 ... +1
+        Y = -1 ... +1
+    */
+
+    let x =
+        (clientX / width) * 2 - 1;
+
+    let y =
+        1 - (clientY / height) * 2;
+
+
+    /*
+        Keep the trackball proportional.
+    */
+
+    const size =
+        Math.min(width, height);
+
+
+    x =
+        x * width / size;
+
+
+    y =
+        y * height / size;
+
+
+    /*
+        Virtual sphere radius.
+    */
+
+    const radius = 1;
+
+
+    const lengthSquared =
+        x * x +
+        y * y;
+
+
+    let z;
+
+
+    if (lengthSquared <= radius * radius) {
+
+        z =
+            Math.sqrt(
+                radius * radius -
+                lengthSquared
+            );
+
+    } else {
+
+        /*
+            Outside the sphere, project onto
+            the edge instead of allowing unstable
+            values.
+        */
+
+        const length =
+            Math.sqrt(lengthSquared);
+
+        x /= length;
+        y /= length;
+        z = 0;
+
+    }
+
+
+    return new THREE.Vector3(
+        x,
+        y,
+        z
+    ).normalize();
+
+}
 
 
 /* =========================================================
-   TARGET ORIENTATION
+   TRACKBALL ROTATION
+========================================================= */
+
+function rotateTrackball(
+    previousVector,
+    currentVector
+) {
+
+    /*
+        Calculate rotation axis.
+
+        Cross product gives the axis perpendicular
+        to the two finger positions on the sphere.
+    */
+
+    const rotationAxis =
+        new THREE.Vector3()
+            .crossVectors(
+                previousVector,
+                currentVector
+            );
+
+
+    const axisLength =
+        rotationAxis.length();
+
+
+    /*
+        Almost no movement.
+    */
+
+    if (axisLength < 0.00001) {
+
+        return;
+
+    }
+
+
+    rotationAxis.normalize();
+
+
+    /*
+        Calculate angle between the two vectors.
+    */
+
+    let dot =
+        previousVector.dot(
+            currentVector
+        );
+
+
+    dot =
+        THREE.MathUtils.clamp(
+            dot,
+            -1,
+            1
+        );
+
+
+    let angle =
+        Math.acos(dot);
+
+
+    angle *= ROTATION_SPEED;
+
+
+    /*
+        Create quaternion representing
+        this drag movement.
+    */
+
+    const deltaQuaternion =
+        new THREE.Quaternion();
+
+
+    deltaQuaternion.setFromAxisAngle(
+        rotationAxis,
+        angle
+    );
+
+
+    /*
+        Add this rotation to the existing
+        Apple rotation.
+
+        This is the important part:
+
+        We are NOT only rotating Y anymore.
+
+        The Apple can rotate around ANY
+        direction indicated by the drag.
+    */
+
+    userQuaternion.premultiply(
+        deltaQuaternion
+    );
+
+
+    userQuaternion.normalize();
+
+
+    applyAppleRotation();
+
+}
+
+
+/* =========================================================
+   APPLY APPLE ROTATION
+========================================================= */
+
+function applyAppleRotation() {
+
+    /*
+        Start with the user's free 3D rotation.
+    */
+
+    finalQuaternion.copy(
+        userQuaternion
+    );
+
+
+    /*
+        If the target is lying on the floor,
+        apply the required target-plane correction.
+
+        This does NOT use accelerometer data.
+    */
+
+    if (currentMode === "floor") {
+
+        finalQuaternion.multiply(
+            floorQuaternion
+        );
+
+    }
+
+
+    appleContainer.object3D.quaternion.copy(
+        finalQuaternion
+    );
+
+
+    /*
+        Preserve scale.
+    */
+
+    appleContainer.object3D.scale.set(
+        currentScale,
+        currentScale,
+        currentScale
+    );
+
+}
+
+
+/* =========================================================
+   DETECT TARGET ORIENTATION
 ========================================================= */
 
 function detectTargetMode() {
-
 
     if (!target.object3D) {
 
@@ -274,6 +488,10 @@ function detectTargetMode() {
     );
 
 
+    /*
+        MindAR target local normal.
+    */
+
     targetNormal.set(
         0,
         0,
@@ -283,9 +501,20 @@ function detectTargetMode() {
 
     rotatedNormal
         .copy(targetNormal)
-        .applyQuaternion(targetQuaternion)
+        .applyQuaternion(
+            targetQuaternion
+        )
         .normalize();
 
+
+    /*
+        Determine how close the target normal
+        is to world-up.
+
+        High value = floor.
+
+        Low value = vertical.
+    */
 
     const verticalAmount =
         Math.abs(
@@ -293,46 +522,36 @@ function detectTargetMode() {
         );
 
 
-    let detectedMode;
-
-
     if (
         verticalAmount >
         VERTICAL_THRESHOLD
     ) {
 
-        detectedMode = "floor";
+        return "floor";
 
     }
 
-    else if (
+
+    if (
         verticalAmount <
         FLOOR_THRESHOLD
     ) {
 
-        detectedMode = "vertical";
-
-    }
-
-    else {
-
-        detectedMode =
-            currentMode;
+        return "vertical";
 
     }
 
 
-    return detectedMode;
+    return currentMode;
 
 }
 
 
 /* =========================================================
-   STABLE MODE SWITCH
+   STABLE TARGET MODE
 ========================================================= */
 
 function updateTargetMode() {
-
 
     const detectedMode =
         detectTargetMode();
@@ -381,166 +600,27 @@ function updateTargetMode() {
 
         candidateFrames = 0;
 
-    }
-
-}
-
-
-/* =========================================================
-   APPLY ROTATION
-========================================================= */
-
-function applyAppleRotation() {
-
-
-    /*
-        Start with the user quaternion.
-    */
-
-    dragQuaternion.copy(
-        userQuaternion
-    );
-
-
-    /*
-        Apply the floor correction only when needed.
-    */
-
-    if (
-        currentMode ===
-        "floor"
-    ) {
-
-
-        const floorCorrection =
-            new THREE.Quaternion();
-
-
-        floorCorrection.setFromAxisAngle(
-
-            new THREE.Vector3(
-                1,
-                0,
-                0
-            ),
-
-            THREE.MathUtils.degToRad(-90)
-
-        );
-
-
-        dragQuaternion.multiply(
-            floorCorrection
-        );
+        applyAppleRotation();
 
     }
 
-
-    appleContainer.object3D.quaternion.copy(
-        dragQuaternion
-    );
-
 }
 
 
 /* =========================================================
-   FREE DRAG ROTATION
-========================================================= */
-
-/*
-    Horizontal drag:
-
-        rotates around Y
-
-    Vertical drag:
-
-        rotates around X
-
-    Diagonal drag:
-
-        combines both.
-
-    Quaternion multiplication prevents
-    Euler-angle flipping/gimbal problems.
-*/
-
-function rotateFromDrag(
-    deltaX,
-    deltaY
-) {
-
-
-    const yaw =
-        -deltaX *
-        ROTATION_SPEED *
-        0.01;
-
-
-    const pitch =
-        -deltaY *
-        ROTATION_SPEED *
-        0.01;
-
-
-    rotationY.setFromAxisAngle(
-
-        new THREE.Vector3(
-            0,
-            1,
-            0
-        ),
-
-        yaw
-
-    );
-
-
-    rotationX.setFromAxisAngle(
-
-        new THREE.Vector3(
-            1,
-            0,
-            0
-        ),
-
-        pitch
-
-    );
-
-
-    /*
-        Apply yaw and pitch to the current
-        user rotation.
-    */
-
-    userQuaternion.premultiply(
-        rotationY
-    );
-
-
-    userQuaternion.premultiply(
-        rotationX
-    );
-
-
-    userQuaternion.normalize();
-
-
-    applyAppleRotation();
-
-}
-
-
-/* =========================================================
-   MOUSE DOWN
+   POINTER DOWN
 ========================================================= */
 
 document.addEventListener(
-    "mousedown",
+    "pointerdown",
     function(event) {
 
+        /*
+            Only primary mouse button.
+        */
 
         if (
+            event.pointerType === "mouse" &&
             event.button !== 0
         ) {
 
@@ -549,134 +629,72 @@ document.addEventListener(
         }
 
 
-        mouseDown = true;
+        pointers.set(
+            event.pointerId,
+            event
+        );
 
 
-        mouseX =
-            event.clientX;
+        /*
+            One pointer = rotation.
+        */
+
+        if (
+            pointers.size === 1
+        ) {
+
+            activeRotationPointer =
+                event.pointerId;
 
 
-        mouseY =
-            event.clientY;
-
-    }
-);
-
-
-/* =========================================================
-   MOUSE MOVE
-========================================================= */
-
-document.addEventListener(
-    "mousemove",
-    function(event) {
+            previousTrackballVector =
+                getTrackballVector(
+                    event.clientX,
+                    event.clientY
+                );
 
 
-        if (!mouseDown) {
+            try {
 
-            return;
+                event.target.setPointerCapture(
+                    event.pointerId
+                );
+
+            } catch (error) {}
 
         }
 
 
-        const deltaX =
-            event.clientX -
-            mouseX;
-
-
-        const deltaY =
-            event.clientY -
-            mouseY;
-
-
-        rotateFromDrag(
-            deltaX,
-            deltaY
-        );
-
-
-        mouseX =
-            event.clientX;
-
-
-        mouseY =
-            event.clientY;
-
-    }
-);
-
-
-/* =========================================================
-   MOUSE UP
-========================================================= */
-
-document.addEventListener(
-    "mouseup",
-    function() {
-
-        mouseDown = false;
-
-    }
-);
-
-
-/* =========================================================
-   TOUCH START
-========================================================= */
-
-document.addEventListener(
-    "touchstart",
-    function(event) {
-
-
         /*
-            PINCH
+            Two pointers = pinch.
         */
 
         if (
-            event.touches.length === 2
+            pointers.size === 2
         ) {
+
+            activeRotationPointer =
+                null;
+
+            previousTrackballVector =
+                null;
+
+
+            const values =
+                Array.from(
+                    pointers.values()
+                );
 
 
             initialPinchDistance =
                 getDistance(
-                    event.touches[0],
-                    event.touches[1]
+                    values[0],
+                    values[1]
                 );
 
 
             initialScale =
                 currentScale;
-
-
-            touchRotating =
-                false;
-
-
-            return;
-
-        }
-
-
-        /*
-            SINGLE FINGER ROTATION
-        */
-
-        if (
-            event.touches.length === 1
-        ) {
-
-
-            touchRotating =
-                true;
-
-
-            touchX =
-                event.touches[0].clientX;
-
-
-            touchY =
-                event.touches[0].clientY;
 
         }
 
@@ -688,30 +706,51 @@ document.addEventListener(
 
 
 /* =========================================================
-   TOUCH MOVE
+   POINTER MOVE
 ========================================================= */
 
 document.addEventListener(
-    "touchmove",
+    "pointermove",
     function(event) {
 
+        if (
+            !pointers.has(
+                event.pointerId
+            )
+        ) {
 
-        event.preventDefault();
+            return;
+
+        }
+
+
+        pointers.set(
+            event.pointerId,
+            event
+        );
 
 
         /*
-            PINCH SCALE
+            TWO POINTERS = PINCH
         */
 
         if (
-            event.touches.length === 2
+            pointers.size === 2
         ) {
+
+            event.preventDefault();
+
+
+            const values =
+                Array.from(
+                    pointers.values()
+                );
 
 
             const distance =
                 getDistance(
-                    event.touches[0],
-                    event.touches[1]
+                    values[0],
+                    values[1]
                 );
 
 
@@ -719,6 +758,12 @@ document.addEventListener(
                 initialPinchDistance ===
                 null
             ) {
+
+                initialPinchDistance =
+                    distance;
+
+                initialScale =
+                    currentScale;
 
                 return;
 
@@ -736,12 +781,10 @@ document.addEventListener(
 
 
             newScale =
-                Math.max(
+                THREE.MathUtils.clamp(
+                    newScale,
                     MIN_SCALE,
-                    Math.min(
-                        MAX_SCALE,
-                        newScale
-                    )
+                    MAX_SCALE
                 );
 
 
@@ -750,11 +793,9 @@ document.addEventListener(
 
 
             appleContainer.object3D.scale.set(
-
                 newScale,
                 newScale,
                 newScale
-
             );
 
 
@@ -764,45 +805,39 @@ document.addEventListener(
 
 
         /*
-            FREE ONE-FINGER ROTATION
+            ONE POINTER = FREE ROTATION
         */
 
         if (
-            event.touches.length === 1 &&
-            touchRotating
+            pointers.size === 1 &&
+            event.pointerId ===
+            activeRotationPointer
         ) {
 
-
-            const currentX =
-                event.touches[0].clientX;
+            event.preventDefault();
 
 
-            const currentY =
-                event.touches[0].clientY;
+            const currentVector =
+                getTrackballVector(
+                    event.clientX,
+                    event.clientY
+                );
 
 
-            const deltaX =
-                currentX -
-                touchX;
+            if (
+                previousTrackballVector
+            ) {
+
+                rotateTrackball(
+                    previousTrackballVector,
+                    currentVector
+                );
+
+            }
 
 
-            const deltaY =
-                currentY -
-                touchY;
-
-
-            rotateFromDrag(
-                deltaX,
-                deltaY
-            );
-
-
-            touchX =
-                currentX;
-
-
-            touchY =
-                currentY;
+            previousTrackballVector =
+                currentVector;
 
         }
 
@@ -814,34 +849,83 @@ document.addEventListener(
 
 
 /* =========================================================
-   TOUCH END
+   POINTER UP
 ========================================================= */
 
-document.addEventListener(
-    "touchend",
-    function(event) {
+function endPointer(event) {
+
+    pointers.delete(
+        event.pointerId
+    );
 
 
-        if (
-            event.touches.length < 2
-        ) {
+    /*
+        No pointers left.
+    */
 
-            initialPinchDistance =
-                null;
+    if (
+        pointers.size === 0
+    ) {
 
-        }
+        activeRotationPointer =
+            null;
 
+        previousTrackballVector =
+            null;
 
-        if (
-            event.touches.length === 0
-        ) {
-
-            touchRotating =
-                false;
-
-        }
+        initialPinchDistance =
+            null;
 
     }
+
+
+    /*
+        One pointer remains after pinch.
+
+        Start a fresh rotation from its
+        current position.
+
+        This prevents a sudden jump.
+    */
+
+    if (
+        pointers.size === 1
+    ) {
+
+        const remaining =
+            Array.from(
+                pointers.values()
+            )[0];
+
+
+        activeRotationPointer =
+            remaining.pointerId;
+
+
+        previousTrackballVector =
+            getTrackballVector(
+                remaining.clientX,
+                remaining.clientY
+            );
+
+
+        initialPinchDistance =
+            null;
+
+    }
+
+}
+
+
+document.addEventListener(
+    "pointerup",
+    endPointer
+);
+
+
+document.addEventListener(
+    "pointercancel",
+    endPointer
 );
 
 
@@ -850,19 +934,18 @@ document.addEventListener(
 ========================================================= */
 
 function getDistance(
-    touch1,
-    touch2
+    pointA,
+    pointB
 ) {
 
-
     const dx =
-        touch1.clientX -
-        touch2.clientX;
+        pointA.clientX -
+        pointB.clientX;
 
 
     const dy =
-        touch1.clientY -
-        touch2.clientY;
+        pointA.clientY -
+        pointB.clientY;
 
 
     return Math.sqrt(
@@ -879,16 +962,11 @@ function getDistance(
 
 function updateAR() {
 
-
     if (
         target.object3D.visible
     ) {
 
-
         updateTargetMode();
-
-
-        applyAppleRotation();
 
     }
 
@@ -899,6 +977,10 @@ function updateAR() {
 
 }
 
+
+/* =========================================================
+   START
+========================================================= */
 
 scene.addEventListener(
     "loaded",
@@ -911,9 +993,7 @@ scene.addEventListener(
     }
 );
 
-
 </script>
-
 
 </body>
 </html>
