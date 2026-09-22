@@ -2,11 +2,16 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+>
 
 <title>Apple AR</title>
 
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
 <style>
@@ -21,11 +26,14 @@ body {
     background: transparent;
 }
 
-a-scene,
-canvas {
+a-scene {
     width: 100%;
     height: 100%;
     touch-action: none;
+}
+
+canvas {
+    touch-action: none !important;
 }
 </style>
 </head>
@@ -43,23 +51,29 @@ canvas {
     renderer="colorManagement: true; antialias: true;"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false"
-    embedded>
+    embedded
+>
 
     <a-assets>
+
         <a-asset-item
             id="appleModel"
             src="./Apple.glb">
         </a-asset-item>
+
     </a-assets>
+
 
     <a-camera
         position="0 0 0"
         look-controls="enabled: false">
     </a-camera>
 
+
     <a-entity
         id="imageTarget"
-        mindar-image-target="targetIndex: 0">
+        mindar-image-target="targetIndex: 0"
+    >
 
         <a-entity id="appleContainer">
 
@@ -68,7 +82,8 @@ canvas {
                 src="#appleModel"
                 position="0 0 0"
                 rotation="0 0 0"
-                scale="1 1 1">
+                scale="1 1 1"
+            >
             </a-gltf-model>
 
         </a-entity>
@@ -77,23 +92,34 @@ canvas {
 
 </a-scene>
 
+
 <script>
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", function () {
 
-    const scene = document.querySelector("a-scene");
-    const target = document.querySelector("#imageTarget");
-    const appleContainer = document.querySelector("#appleContainer");
+    const scene =
+        document.querySelector("a-scene");
 
-    const THREE = AFRAME.THREE;
+    const target =
+        document.querySelector("#imageTarget");
+
+    const appleContainer =
+        document.querySelector("#appleContainer");
+
+    const THREE =
+        AFRAME.THREE;
+
 
     /* =========================================================
-       AR TARGET ORIENTATION
+       TARGET ORIENTATION
        ========================================================= */
 
     let currentMode = "vertical";
+
     let pendingMode = "vertical";
+
     let modeConfirmFrames = 0;
+
 
     const FLOOR_CORRECTION =
         new THREE.Quaternion().setFromEuler(
@@ -105,17 +131,30 @@ document.addEventListener("DOMContentLoaded", () => {
             )
         );
 
+
     const worldUp =
-        new THREE.Vector3(0, 1, 0);
+        new THREE.Vector3(
+            0,
+            1,
+            0
+        );
+
 
     const targetNormal =
-        new THREE.Vector3(0, 0, 1);
+        new THREE.Vector3(
+            0,
+            0,
+            1
+        );
+
 
     const worldNormal =
         new THREE.Vector3();
 
-    const targetWorldQuaternion =
+
+    const targetQuaternion =
         new THREE.Quaternion();
+
 
     function updateTargetMode() {
 
@@ -123,35 +162,49 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+
         target.object3D.getWorldQuaternion(
-            targetWorldQuaternion
+            targetQuaternion
         );
+
 
         worldNormal
             .copy(targetNormal)
-            .applyQuaternion(targetWorldQuaternion)
+            .applyQuaternion(targetQuaternion)
             .normalize();
+
 
         const verticalDot =
             Math.abs(
                 worldNormal.dot(worldUp)
             );
 
+
         let detectedMode;
 
+
         if (verticalDot > 0.55) {
+
             detectedMode = "floor";
+
         }
         else if (verticalDot < 0.25) {
+
             detectedMode = "vertical";
+
         }
         else {
+
             detectedMode = currentMode;
+
         }
+
 
         if (detectedMode !== pendingMode) {
 
-            pendingMode = detectedMode;
+            pendingMode =
+                detectedMode;
+
             modeConfirmFrames = 0;
 
         }
@@ -164,7 +217,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 currentMode !== pendingMode
             ) {
 
-                currentMode = pendingMode;
+                currentMode =
+                    pendingMode;
+
             }
         }
     }
@@ -172,63 +227,72 @@ document.addEventListener("DOMContentLoaded", () => {
 
     /* =========================================================
        USER ROTATION
+       =========================================================
 
        IMPORTANT:
 
-       This version does NOT use the previous trackball
-       quaternion cross-product method.
+       We do NOT use a trackball here.
 
-       Instead, finger movement is converted directly into
-       screen-space rotation.
+       The Apple is rotated directly according to the
+       direction the finger moves on the screen.
 
-       Finger RIGHT  = object rotates RIGHT
-       Finger LEFT   = object rotates LEFT
-       Finger UP     = object rotates UP
-       Finger DOWN   = object rotates DOWN
+       RIGHT  = positive Y rotation
+       LEFT   = negative Y rotation
 
-       Horizontal and vertical movement can be combined,
-       allowing diagonal / arbitrary 3D rotation.
+       UP     = negative X rotation
+       DOWN   = positive X rotation
+
+       This is intentionally camera/screen-style manipulation.
        ========================================================= */
+
 
     const userQuaternion =
         new THREE.Quaternion();
 
-    const rotationCenter =
-        new THREE.Vector2();
 
-    let activeRotationPointer = null;
-    let isRotating = false;
+    const rotationX =
+        new THREE.Quaternion();
+
+
+    const rotationY =
+        new THREE.Quaternion();
+
+
+    const AXIS_X =
+        new THREE.Vector3(
+            1,
+            0,
+            0
+        );
+
+
+    const AXIS_Y =
+        new THREE.Vector3(
+            0,
+            1,
+            0
+        );
+
 
     /*
        Rotation sensitivity.
 
-       Increase these if rotation feels too slow.
-       Decrease them if rotation feels too fast.
+       Change ONLY these if you want the rotation
+       faster or slower.
     */
 
-    const ROTATION_SPEED_X = 0.008;
-    const ROTATION_SPEED_Y = 0.008;
+    const ROTATION_SPEED =
+        0.010;
 
 
-    /*
-       World axes.
-
-       Horizontal finger movement rotates around WORLD Y.
-
-       Vertical finger movement rotates around WORLD X.
-    */
-
-    const WORLD_Y =
-        new THREE.Vector3(0, 1, 0);
-
-    const WORLD_X =
-        new THREE.Vector3(1, 0, 0);
-
-
-    function rotateFromFingerMovement(
+    function rotateApple(
         deltaX,
         deltaY
     ) {
+
+        /*
+        Ignore microscopic movement.
+        */
 
         if (
             Math.abs(deltaX) < 0.001 &&
@@ -237,94 +301,81 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        /*
-        ---------------------------------------------------------
-        HORIZONTAL
 
-        Finger RIGHT  -> deltaX positive
-        Finger LEFT   -> deltaX negative
+        /* -----------------------------------------------------
+           HORIZONTAL
 
-        The NEGATIVE sign is intentional.
+           Finger RIGHT:
+               deltaX > 0
 
-        In A-Frame's camera coordinate system, this makes the
-        visible object follow the finger instead of moving
-        visually opposite to it.
-        ---------------------------------------------------------
-        */
+           Apple RIGHT:
+               positive Y rotation
 
-        const horizontalAngle =
-            -deltaX * ROTATION_SPEED_X;
+           Finger LEFT:
+               deltaX < 0
 
+           Apple LEFT:
+               negative Y rotation
+           ----------------------------------------------------- */
 
-        /*
-        ---------------------------------------------------------
-        VERTICAL
-
-        Finger UP   -> deltaY negative
-        Finger DOWN -> deltaY positive
-
-        Therefore:
-
-        UP   -> positive rotation
-        DOWN -> negative rotation
-
-        This makes the object visually follow the finger.
-        ---------------------------------------------------------
-        */
-
-        const verticalAngle =
-            -deltaY * ROTATION_SPEED_Y;
+        const yaw =
+            deltaX * ROTATION_SPEED;
 
 
-        /*
-        Create horizontal rotation.
-        */
+        rotationY.setFromAxisAngle(
+            AXIS_Y,
+            yaw
+        );
 
-        const horizontalQuaternion =
-            new THREE.Quaternion();
 
-        horizontalQuaternion.setFromAxisAngle(
-            WORLD_Y,
-            horizontalAngle
+        /* -----------------------------------------------------
+           VERTICAL
+
+           Browser screen coordinates:
+
+               UP   = negative deltaY
+               DOWN = positive deltaY
+
+           We therefore use deltaY directly with X rotation
+           so the Apple follows the finger direction.
+           ----------------------------------------------------- */
+
+        const pitch =
+            deltaY * ROTATION_SPEED;
+
+
+        rotationX.setFromAxisAngle(
+            AXIS_X,
+            pitch
         );
 
 
         /*
-        Create vertical rotation.
-        */
+        Apply both rotations.
 
-        const verticalQuaternion =
-            new THREE.Quaternion();
-
-        verticalQuaternion.setFromAxisAngle(
-            WORLD_X,
-            verticalAngle
-        );
-
-
-        /*
-        Apply the rotations in SCREEN/WORLD space.
-
-        Horizontal and vertical movement are both preserved,
+        Horizontal and vertical movement are independent,
         so diagonal movement produces combined 3D rotation.
         */
 
         userQuaternion.premultiply(
-            horizontalQuaternion
+            rotationY
         );
+
 
         userQuaternion.premultiply(
-            verticalQuaternion
+            rotationX
         );
 
+
         userQuaternion.normalize();
+
 
         applyAppleRotation();
     }
 
 
     /* =========================================================
-       APPLY USER ROTATION + FLOOR CORRECTION
+       APPLY FINAL ROTATION
        ========================================================= */
 
     function applyAppleRotation() {
@@ -332,11 +383,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const finalQuaternion =
             userQuaternion.clone();
 
-        /*
-        The Apple must remain upright when the target image
-        is lying flat on the floor.
 
-        This correction is separate from user rotation.
+        /*
+        Only the AR target orientation correction is applied
+        here.
+
+        User rotation is NEVER overwritten by MindAR.
         */
 
         if (currentMode === "floor") {
@@ -346,6 +398,7 @@ document.addEventListener("DOMContentLoaded", () => {
             );
         }
 
+
         appleContainer.object3D.quaternion.copy(
             finalQuaternion
         );
@@ -353,14 +406,39 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* =========================================================
-       PINCH SCALE
+       POINTER STATE
        ========================================================= */
 
     const pointers =
         new Map();
 
-    let initialPinchDistance = null;
-    let initialPinchScale = 1;
+
+    let rotationPointerId =
+        null;
+
+
+    let previousX =
+        0;
+
+
+    let previousY =
+        0;
+
+
+    let isRotating =
+        false;
+
+
+    /* =========================================================
+       PINCH STATE
+       ========================================================= */
+
+    let pinchStartDistance =
+        null;
+
+
+    let pinchStartScale =
+        1;
 
 
     function getPinchDistance() {
@@ -369,73 +447,93 @@ document.addEventListener("DOMContentLoaded", () => {
             return null;
         }
 
+
         const values =
             Array.from(
                 pointers.values()
             );
 
-        const a = values[0];
-        const b = values[1];
 
-        const dx = a.x - b.x;
-        const dy = a.y - b.y;
+        const a =
+            values[0];
+
+
+        const b =
+            values[1];
+
+
+        const dx =
+            a.x - b.x;
+
+
+        const dy =
+            a.y - b.y;
+
 
         return Math.sqrt(
-            dx * dx + dy * dy
+            dx * dx +
+            dy * dy
         );
     }
 
 
     function updatePinch() {
 
-        if (pointers.size !== 2) {
-
-            initialPinchDistance = null;
-
-            return;
-        }
-
         const distance =
             getPinchDistance();
 
-        if (
-            distance === null ||
-            distance <= 0
-        ) {
+
+        if (distance === null) {
+
+            pinchStartDistance =
+                null;
+
             return;
         }
 
-        if (
-            initialPinchDistance === null
-        ) {
 
-            initialPinchDistance =
+        if (pinchStartDistance === null) {
+
+            pinchStartDistance =
                 distance;
 
-            initialPinchScale =
-                appleContainer.object3D.scale.x;
+
+            pinchStartScale =
+                appleContainer
+                    .object3D
+                    .scale
+                    .x;
+
 
             return;
         }
 
-        let newScale =
-            initialPinchScale *
+
+        if (pinchStartDistance <= 0) {
+            return;
+        }
+
+
+        let scale =
+            pinchStartScale *
             (
                 distance /
-                initialPinchDistance
+                pinchStartDistance
             );
 
-        newScale =
+
+        scale =
             THREE.MathUtils.clamp(
-                newScale,
+                scale,
                 0.3,
                 3.0
             );
 
+
         appleContainer.object3D.scale.set(
-            newScale,
-            newScale,
-            newScale
+            scale,
+            scale,
+            scale
         );
     }
 
@@ -444,7 +542,7 @@ document.addEventListener("DOMContentLoaded", () => {
        POINTER DOWN
        ========================================================= */
 
-    function onPointerDown(event) {
+    function pointerDown(event) {
 
         pointers.set(
             event.pointerId,
@@ -454,39 +552,60 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         );
 
+
         /*
-        Start rotation only with one finger.
+        One finger = rotation.
         */
 
         if (pointers.size === 1) {
 
-            activeRotationPointer =
+            rotationPointerId =
                 event.pointerId;
 
-            rotationCenter.set(
-                event.clientX,
-                event.clientY
-            );
 
-            isRotating = true;
+            previousX =
+                event.clientX;
+
+
+            previousY =
+                event.clientY;
+
+
+            isRotating =
+                true;
+
         }
         else {
 
             /*
-            Two fingers = pinch mode.
+            Two fingers = pinch.
+
+            Stop rotation so the second finger cannot
+            accidentally cause a rotation jump.
             */
 
-            isRotating = false;
+            isRotating =
+                false;
 
-            initialPinchDistance = null;
+
+            rotationPointerId =
+                null;
+
+
+            pinchStartDistance =
+                null;
         }
 
+
         try {
+
             event.target.setPointerCapture(
                 event.pointerId
             );
+
         }
-        catch (e) {}
+        catch (error) {}
+
 
         event.preventDefault();
     }
@@ -496,7 +615,7 @@ document.addEventListener("DOMContentLoaded", () => {
        POINTER MOVE
        ========================================================= */
 
-    function onPointerMove(event) {
+    function pointerMove(event) {
 
         if (
             !pointers.has(
@@ -506,25 +625,9 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        const previousX =
-            pointers.get(
-                event.pointerId
-            ).x;
-
-        const previousY =
-            pointers.get(
-                event.pointerId
-            ).y;
-
-        const deltaX =
-            event.clientX - previousX;
-
-        const deltaY =
-            event.clientY - previousY;
-
 
         /*
-        Update pointer position.
+        Update pointer coordinates.
         */
 
         pointers.set(
@@ -536,38 +639,63 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
 
-        /*
-        ---------------------------------------------------------
-        ONE FINGER = ROTATION
-        ---------------------------------------------------------
-        */
+        /* -----------------------------------------------------
+           ONE FINGER
+           ----------------------------------------------------- */
 
         if (
             pointers.size === 1 &&
             isRotating &&
-            activeRotationPointer ===
+            rotationPointerId ===
             event.pointerId
         ) {
 
-            rotateFromFingerMovement(
+
+            const deltaX =
+                event.clientX -
+                previousX;
+
+
+            const deltaY =
+                event.clientY -
+                previousY;
+
+
+            /*
+            THIS is the important part.
+
+            The exact physical direction of the finger
+            is passed directly into rotateApple().
+            */
+
+            rotateApple(
                 deltaX,
                 deltaY
             );
+
+
+            previousX =
+                event.clientX;
+
+
+            previousY =
+                event.clientY;
         }
 
 
-        /*
-        ---------------------------------------------------------
-        TWO FINGERS = PINCH
-        ---------------------------------------------------------
-        */
+        /* -----------------------------------------------------
+           TWO FINGERS
+           ----------------------------------------------------- */
 
-        if (pointers.size === 2) {
+        else if (pointers.size === 2) {
 
-            isRotating = false;
+            isRotating =
+                false;
+
 
             updatePinch();
         }
+
 
         event.preventDefault();
     }
@@ -577,25 +705,33 @@ document.addEventListener("DOMContentLoaded", () => {
        POINTER UP
        ========================================================= */
 
-    function onPointerUp(event) {
+    function pointerUp(event) {
 
         pointers.delete(
             event.pointerId
         );
 
+
         if (
-            activeRotationPointer ===
+            rotationPointerId ===
             event.pointerId
         ) {
 
-            activeRotationPointer = null;
-            isRotating = false;
+            rotationPointerId =
+                null;
+
+
+            isRotating =
+                false;
         }
+
 
         if (pointers.size < 2) {
 
-            initialPinchDistance = null;
+            pinchStartDistance =
+                null;
         }
+
 
         event.preventDefault();
     }
@@ -605,24 +741,31 @@ document.addEventListener("DOMContentLoaded", () => {
        POINTER CANCEL
        ========================================================= */
 
-    function onPointerCancel(event) {
+    function pointerCancel(event) {
 
         pointers.delete(
             event.pointerId
         );
 
+
         if (
-            activeRotationPointer ===
+            rotationPointerId ===
             event.pointerId
         ) {
 
-            activeRotationPointer = null;
-            isRotating = false;
+            rotationPointerId =
+                null;
+
+
+            isRotating =
+                false;
         }
+
 
         if (pointers.size < 2) {
 
-            initialPinchDistance = null;
+            pinchStartDistance =
+                null;
         }
     }
 
@@ -639,6 +782,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 "canvas"
             );
 
+
         if (!canvas) {
 
             requestAnimationFrame(
@@ -648,45 +792,53 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+
         canvas.style.touchAction =
             "none";
 
+
         canvas.addEventListener(
             "pointerdown",
-            onPointerDown,
+            pointerDown,
             {
                 passive: false
             }
         );
+
 
         canvas.addEventListener(
             "pointermove",
-            onPointerMove,
+            pointerMove,
             {
                 passive: false
             }
         );
+
 
         canvas.addEventListener(
             "pointerup",
-            onPointerUp,
+            pointerUp,
             {
                 passive: false
             }
         );
+
 
         canvas.addEventListener(
             "pointercancel",
-            onPointerCancel,
+            pointerCancel,
             {
                 passive: false
             }
         );
 
+
         canvas.addEventListener(
             "contextmenu",
-            event => {
+            function (event) {
+
                 event.preventDefault();
+
             },
             {
                 passive: false
@@ -696,7 +848,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* =========================================================
-       AR UPDATE LOOP
+       AR LOOP
        ========================================================= */
 
     function updateAR() {
@@ -708,19 +860,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
             updateTargetMode();
 
+
             /*
-            IMPORTANT:
+            Reapply the user's existing rotation.
 
-            Do NOT recreate or reset the user's rotation here.
-
-            MindAR only determines whether the target is vertical
-            or lying on the floor.
-
-            The user's rotation remains completely independent.
+            We NEVER reset userQuaternion here.
             */
 
             applyAppleRotation();
         }
+
 
         requestAnimationFrame(
             updateAR
@@ -734,12 +883,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     scene.addEventListener(
         "loaded",
-        () => {
+        function () {
 
             setupPointerEvents();
 
         }
     );
+
 
     requestAnimationFrame(
         updateAR
