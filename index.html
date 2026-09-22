@@ -1,133 +1,891 @@
-updateDebug: function (time) {
-          if (!DEBUG || time - this.lastDebugUpdate < 180) return;
-          this.lastDebugUpdate = time;
-          const output = document.getElementById('debug');
-          if (!output) return;
-          output.hidden = false;
-          output.textContent =
-            'target: ' + (this.tracking ? 'found' : 'lost') + '\n' +
-            'orientation sensor: ' + (this.sensorReady ? 'ready' : 'waiting') + '\n' +
-            'screen angle: ' + THREE.MathUtils.radToDeg(this.getScreenOrientationRadians()).toFixed(0) + '\n' +
-            'apple scale: ' + this.userScale.toFixed(2) + '\n' +
-            'apple local quaternion: ' + [
-              this.el.object3D.quaternion.x.toFixed(3),
-              this.el.object3D.quaternion.y.toFixed(3),
-              this.el.object3D.quaternion.z.toFixed(3),
-              this.el.object3D.quaternion.w.toFixed(3)
-            ].join(', ');
-        },
+```html
+<!DOCTYPE html>
+<html>
+<head>
 
-        remove: function () {
-          window.removeEventListener('deviceorientation', this.onDeviceOrientation, true);
-          window.removeEventListener('orientationchange', this.onScreenOrientationChange, true);
-          if (window.screen && window.screen.orientation) {
-            window.screen.orientation.removeEventListener('change', this.onScreenOrientationChange, true);
-          }
-          this.targetEl.removeEventListener('targetFound', this.onTargetFound);
-          this.targetEl.removeEventListener('targetLost', this.onTargetLost);
-          this.el.sceneEl.removeEventListener('renderstart', this.onRenderStart);
-          if (!this.canvas) return;
-          this.canvas.removeEventListener('pointerdown', this.onPointerDown);
-          this.canvas.removeEventListener('pointermove', this.onPointerMove);
-          this.canvas.removeEventListener('pointerup', this.onPointerEnd);
-          this.canvas.removeEventListener('pointercancel', this.onPointerEnd);
-        }
-      });
+    <meta charset="UTF-8">
 
-      function getAppleController() {
-        const apple = document.getElementById('apple');
-        return apple && apple.components && apple.components['world-upright-apple'];
-      }
+    <meta name="viewport"
+          content="width=device-width,
+                   initial-scale=1.0,
+                   maximum-scale=1.0,
+                   user-scalable=no">
 
-      function waitForAppleController() {
-        return new Promise((resolve) => {
-          let attempts = 0;
-          const findController = () => {
-            const controller = getAppleController();
-            if (controller || attempts >= 100) {
-              resolve(controller);
-              return;
-            }
-            attempts += 1;
-            window.setTimeout(findController, 20);
-          };
-          findController();
-        });
-      }
+    <title>Apple AR</title>
 
-      function setupPermissionUI() {
-        const overlay = document.getElementById('permission-overlay');
-        const button = document.getElementById('enable-world-up');
-        const status = document.getElementById('permission-status');
-        const debug = document.getElementById('debug');
-        if (DEBUG) debug.hidden = false;
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
-        const orientationSupported = typeof window.DeviceOrientationEvent !== 'undefined';
-        const gestureRequired = orientationSupported &&
-          typeof window.DeviceOrientationEvent.requestPermission === 'function';
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
-        // Android normally supplies deviceorientation without a prompt. Desktop
-        // deliberately falls back to normal target-relative orientation.
-        if (!gestureRequired) {
-          overlay.classList.add('hidden');
-          return;
+    <style>
+
+        html,
+        body {
+
+            margin: 0;
+            padding: 0;
+
+            width: 100%;
+            height: 100%;
+
+            overflow: hidden;
+
+            touch-action: none;
+
         }
 
-        button.addEventListener('click', async () => {
-          button.disabled = true;
-          const controller = await waitForAppleController();
-          const granted = controller && await controller.enableDeviceOrientation();
-          if (granted) {
-            overlay.classList.add('hidden');
-          } else {
-            status.textContent = 'World-up needs Motion & Orientation access. You can still scan the target, but it will use normal image-target orientation.';
-            button.disabled = false;
-          }
-        });
-      }
+        a-scene {
 
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', setupPermissionUI, { once: true });
-      } else {
-        setupPermissionUI();
-      }
-    })();
-  </script>
+            width: 100%;
+            height: 100%;
+
+        }
+
+    </style>
+
 </head>
 
-<body>
-  <div id="permission-overlay" class="permission-overlay">
-    <div class="permission-card">
-      <p id="permission-status">Enable Motion &amp; Orientation so the Apple can stay upright when the target is on the floor.</p>
-      <button id="enable-world-up" type="button">Enable world-up</button>
-    </div>
-  </div>
-  <pre id="debug" hidden></pre>
 
-  <a-scene
-    mindar-image="imageTargetSrc: ./targets.mind; autoStart: true;"
+<body>
+
+
+<a-scene
+
+    mindar-image="
+        imageTargetSrc: ./targets.mind;
+        autoStart: true;
+        filterMinCF: 0.0001;
+        filterBeta: 0.01;
+    "
+
     color-space="sRGB"
-    renderer="colorManagement: true; physicallyCorrectLights: true"
+
+    renderer="
+        colorManagement: true;
+        antialias: true;
+    "
+
     vr-mode-ui="enabled: false"
-    device-orientation-permission-ui="enabled: false">
+
+    device-orientation-permission-ui="enabled: false"
+
+    embedded>
+
 
     <a-assets>
-      <a-asset-item id="appleModel" src="./Apple.glb"></a-asset-item>
+
+        <a-asset-item
+            id="appleModel"
+            src="./Apple.glb">
+        </a-asset-item>
+
     </a-assets>
 
-    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-    <!-- MindAR exclusively controls this entity's pose. -->
-    <a-entity id="apple-target" mindar-image-target="targetIndex: 0">
-      <!-- The model's local +Y is treated as its authored up axis. -->
-      <a-gltf-model
-        id="apple"
-        src="#appleModel"
+    <a-camera
+
         position="0 0 0"
-        scale="1 1 1"
-        world-upright-apple>
-      </a-gltf-model>
+
+        look-controls="enabled: false">
+
+    </a-camera>
+
+
+    <!--
+        MINDAR TARGET
+        MindAR controls this entity.
+    -->
+
+    <a-entity
+        id="imageTarget"
+        mindar-image-target="targetIndex: 0">
+
+
+        <!--
+            THIS container is NOT directly controlled by MindAR.
+
+            MindAR controls the parent target.
+            We control the Apple orientation here.
+        -->
+
+        <a-entity
+            id="appleContainer">
+
+
+            <a-gltf-model
+
+                id="apple"
+
+                src="#appleModel"
+
+                position="0 0 0"
+
+                rotation="0 0 0"
+
+                scale="1 1 1">
+
+            </a-gltf-model>
+
+
+        </a-entity>
+
+
     </a-entity>
-  </a-scene>
+
+
+</a-scene>
+
+
+<script>
+
+
+/* =========================================================
+   ELEMENTS
+========================================================= */
+
+const scene =
+    document.querySelector("a-scene");
+
+const target =
+    document.querySelector("#imageTarget");
+
+const appleContainer =
+    document.querySelector("#appleContainer");
+
+const apple =
+    document.querySelector("#apple");
+
+
+/* =========================================================
+   SETTINGS
+========================================================= */
+
+const DEBUG = false;
+
+
+/*
+    Apple interaction scale limits.
+*/
+
+const MIN_SCALE = 0.3;
+const MAX_SCALE = 3.0;
+
+
+/*
+    How sensitive horizontal dragging is.
+*/
+
+const ROTATION_SENSITIVITY = 0.5;
+
+
+/*
+    Target orientation detection.
+
+    If the target changes between vertical and horizontal,
+    we do NOT instantly switch every frame.
+
+    The value has to remain stable for several frames.
+*/
+
+const ORIENTATION_CONFIRM_FRAMES = 12;
+
+
+/*
+    Angle threshold.
+
+    A target whose surface is approximately facing the camera
+    is considered VERTICAL.
+
+    A target whose surface is approximately horizontal
+    is considered FLOOR.
+
+    There is a middle zone where we keep the previous state.
+*/
+
+const VERTICAL_THRESHOLD = 0.55;
+const FLOOR_THRESHOLD = 0.25;
+
+
+/* =========================================================
+   STATE
+========================================================= */
+
+let currentMode = "vertical";
+
+let candidateMode = "vertical";
+
+let candidateFrames = 0;
+
+
+/*
+    User-controlled Apple rotation.
+
+    This is independent from target orientation.
+*/
+
+let userRotationY = 0;
+
+
+/*
+    User scale.
+*/
+
+let currentScale = 1;
+
+
+/* =========================================================
+   TEMPORARY THREE.JS OBJECTS
+========================================================= */
+
+const targetQuaternion =
+    new THREE.Quaternion();
+
+const worldUp =
+    new THREE.Vector3(0, 1, 0);
+
+const targetNormal =
+    new THREE.Vector3(0, 0, 1);
+
+const rotatedNormal =
+    new THREE.Vector3();
+
+
+/* =========================================================
+   ROTATION STATE
+========================================================= */
+
+let rotating = false;
+
+let lastX = 0;
+
+
+/* =========================================================
+   PINCH STATE
+========================================================= */
+
+let initialPinchDistance = null;
+
+let initialScale = 1;
+
+
+/* =========================================================
+   TARGET TRACKING EVENTS
+========================================================= */
+
+target.addEventListener("targetFound", function () {
+
+    if (DEBUG) {
+
+        console.log("MindAR target FOUND");
+
+    }
+
+});
+
+
+target.addEventListener("targetLost", function () {
+
+    if (DEBUG) {
+
+        console.log("MindAR target LOST");
+
+    }
+
+});
+
+
+/* =========================================================
+   DETERMINE TARGET ORIENTATION
+========================================================= */
+
+/*
+    IMPORTANT:
+
+    We do NOT use accelerometer data.
+
+    We inspect the orientation that MindAR has already calculated.
+
+    The target has a local normal.
+
+    We transform that normal into world/camera space.
+
+    Then compare it against the Y axis.
+
+    This lets us distinguish approximately:
+
+        vertical image
+        horizontal/floor image
+*/
+
+function detectTargetMode() {
+
+
+    if (!target.object3D) {
+
+        return currentMode;
+
+    }
+
+
+    /*
+        Copy MindAR's target orientation.
+    */
+
+    targetQuaternion.copy(
+        target.object3D.quaternion
+    );
+
+
+    /*
+        Local target normal.
+
+        MindAR's target plane is represented in its
+        own coordinate system.
+
+        We use its local Z direction as the plane normal.
+    */
+
+    targetNormal.set(0, 0, 1);
+
+
+    /*
+        Transform target normal using MindAR's orientation.
+    */
+
+    rotatedNormal
+        .copy(targetNormal)
+        .applyQuaternion(targetQuaternion)
+        .normalize();
+
+
+    /*
+        Compare target normal against world up.
+
+        Absolute value is used because the normal can face
+        either direction.
+    */
+
+    const verticalAmount =
+        Math.abs(
+            rotatedNormal.dot(worldUp)
+        );
+
+
+    /*
+        HIGH verticalAmount:
+
+            target surface normal points upward/downward
+
+            → target is approximately FLOOR
+
+
+        LOW verticalAmount:
+
+            target surface normal is horizontal
+
+            → target is approximately WALL/MONITOR
+    */
+
+    let detectedMode;
+
+
+    if (verticalAmount > VERTICAL_THRESHOLD) {
+
+        detectedMode = "floor";
+
+    }
+
+    else if (verticalAmount < FLOOR_THRESHOLD) {
+
+        detectedMode = "vertical";
+
+    }
+
+    else {
+
+        /*
+            Middle area.
+
+            Do not change mode.
+            This prevents rapid flipping while the phone
+            is moving through an intermediate angle.
+        */
+
+        detectedMode = currentMode;
+
+    }
+
+
+    return detectedMode;
+
+}
+
+
+/* =========================================================
+   STABLE ORIENTATION SWITCHING
+========================================================= */
+
+function updateTargetMode() {
+
+
+    const detectedMode =
+        detectTargetMode();
+
+
+    /*
+        Same as current mode.
+
+        Nothing needs to happen.
+    */
+
+    if (detectedMode === currentMode) {
+
+        candidateMode = currentMode;
+
+        candidateFrames = 0;
+
+        return;
+
+    }
+
+
+    /*
+        New candidate mode detected.
+    */
+
+    if (detectedMode !== candidateMode) {
+
+        candidateMode = detectedMode;
+
+        candidateFrames = 1;
+
+        return;
+
+    }
+
+
+    /*
+        Candidate has remained stable.
+
+        Increase confirmation counter.
+    */
+
+    candidateFrames++;
+
+
+    /*
+        Only switch after enough stable frames.
+    */
+
+    if (
+        candidateFrames >=
+        ORIENTATION_CONFIRM_FRAMES
+    ) {
+
+        currentMode = candidateMode;
+
+        candidateFrames = 0;
+
+
+        if (DEBUG) {
+
+            console.log(
+                "Apple orientation mode:",
+                currentMode
+            );
+
+        }
+
+    }
+
+}
+
+
+/* =========================================================
+   APPLY APPLE ORIENTATION
+========================================================= */
+
+function applyAppleOrientation() {
+
+
+    /*
+        NEVER modify the MindAR target rotation.
+
+        Only modify our child container.
+    */
+
+
+    if (currentMode === "vertical") {
+
+        /*
+            Normal monitor/wall mode.
+
+            Apple stands normally relative to the target.
+        */
+
+        appleContainer.object3D.rotation.set(
+            0,
+            THREE.MathUtils.degToRad(userRotationY),
+            0
+        );
+
+    }
+
+
+    else if (currentMode === "floor") {
+
+        /*
+            FLOOR MODE.
+
+            The target plane is horizontal.
+
+            Rotate the Apple 90 degrees relative to the
+            target plane so that its Y axis becomes vertical.
+        */
+
+        appleContainer.object3D.rotation.set(
+            THREE.MathUtils.degToRad(-90),
+            THREE.MathUtils.degToRad(userRotationY),
+            0
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   ANIMATION LOOP
+========================================================= */
+
+function updateAR() {
+
+
+    /*
+        Do NOT modify the Apple every frame based on
+        accelerometer values.
+
+        Only inspect MindAR's target orientation.
+    */
+
+    if (target.object3D.visible) {
+
+        updateTargetMode();
+
+        applyAppleOrientation();
+
+    }
+
+
+    requestAnimationFrame(updateAR);
+
+}
+
+
+scene.addEventListener(
+    "loaded",
+    function () {
+
+        requestAnimationFrame(updateAR);
+
+    }
+);
+
+
+/* =========================================================
+   MOUSE ROTATION
+========================================================= */
+
+document.addEventListener(
+    "mousedown",
+    function (event) {
+
+        /*
+            Ignore right mouse button.
+        */
+
+        if (event.button !== 0) {
+
+            return;
+
+        }
+
+
+        rotating = true;
+
+        lastX = event.clientX;
+
+    }
+);
+
+
+document.addEventListener(
+    "mousemove",
+    function (event) {
+
+        if (!rotating) {
+
+            return;
+
+        }
+
+
+        const deltaX =
+            event.clientX - lastX;
+
+
+        userRotationY +=
+            deltaX * ROTATION_SENSITIVITY;
+
+
+        lastX =
+            event.clientX;
+
+
+        applyAppleOrientation();
+
+    }
+);
+
+
+document.addEventListener(
+    "mouseup",
+    function () {
+
+        rotating = false;
+
+    }
+);
+
+
+/* =========================================================
+   TOUCH START
+========================================================= */
+
+document.addEventListener(
+    "touchstart",
+    function (event) {
+
+
+        /*
+            TWO FINGERS = PINCH
+        */
+
+        if (event.touches.length === 2) {
+
+
+            initialPinchDistance =
+                getDistance(
+                    event.touches[0],
+                    event.touches[1]
+                );
+
+
+            initialScale =
+                currentScale;
+
+
+            rotating = false;
+
+
+            return;
+
+        }
+
+
+        /*
+            ONE FINGER = ROTATE
+        */
+
+        if (event.touches.length === 1) {
+
+
+            rotating = true;
+
+
+            lastX =
+                event.touches[0].clientX;
+
+        }
+
+    },
+    {
+        passive: false
+    }
+);
+
+
+/* =========================================================
+   TOUCH MOVE
+========================================================= */
+
+document.addEventListener(
+    "touchmove",
+    function (event) {
+
+
+        event.preventDefault();
+
+
+        /*
+            TWO FINGERS = SCALE
+        */
+
+        if (event.touches.length === 2) {
+
+
+            const distance =
+                getDistance(
+                    event.touches[0],
+                    event.touches[1]
+                );
+
+
+            if (
+                initialPinchDistance === null
+            ) {
+
+                return;
+
+            }
+
+
+            const scaleFactor =
+                distance /
+                initialPinchDistance;
+
+
+            let newScale =
+                initialScale *
+                scaleFactor;
+
+
+            newScale =
+                Math.max(
+                    MIN_SCALE,
+                    Math.min(
+                        MAX_SCALE,
+                        newScale
+                    )
+                );
+
+
+            currentScale =
+                newScale;
+
+
+            appleContainer.object3D.scale.set(
+                newScale,
+                newScale,
+                newScale
+            );
+
+
+            return;
+
+        }
+
+
+        /*
+            ONE FINGER = ROTATE
+        */
+
+        if (
+            event.touches.length === 1 &&
+            rotating
+        ) {
+
+
+            const currentX =
+                event.touches[0].clientX;
+
+
+            const deltaX =
+                currentX - lastX;
+
+
+            userRotationY +=
+                deltaX *
+                ROTATION_SENSITIVITY;
+
+
+            lastX =
+                currentX;
+
+
+            applyAppleOrientation();
+
+        }
+
+    },
+    {
+        passive: false
+    }
+);
+
+
+/* =========================================================
+   TOUCH END
+========================================================= */
+
+document.addEventListener(
+    "touchend",
+    function (event) {
+
+
+        if (
+            event.touches.length < 2
+        ) {
+
+            initialPinchDistance =
+                null;
+
+        }
+
+
+        if (
+            event.touches.length === 0
+        ) {
+
+            rotating = false;
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   PINCH DISTANCE
+========================================================= */
+
+function getDistance(
+    touch1,
+    touch2
+) {
+
+
+    const dx =
+        touch1.clientX -
+        touch2.clientX;
+
+
+    const dy =
+        touch1.clientY -
+        touch2.clientY;
+
+
+    return Math.sqrt(
+        dx * dx +
+        dy * dy
+    );
+
+}
+
+
+</script>
+
+
 </body>
 </html>
+
