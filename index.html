@@ -1,14 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-
 <meta charset="UTF-8">
-
-<meta name="viewport"
-      content="width=device-width,
-               initial-scale=1.0,
-               maximum-scale=1.0,
-               user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
 <title>Apple AR</title>
 
@@ -16,27 +10,27 @@
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
 <style>
-
 html,
 body {
     margin: 0;
     padding: 0;
-
     width: 100%;
     height: 100%;
-
     overflow: hidden;
-
     touch-action: none;
+    background: transparent;
 }
 
 a-scene {
     width: 100%;
     height: 100%;
+    touch-action: none;
 }
 
+canvas {
+    touch-action: none;
+}
 </style>
-
 </head>
 
 <body>
@@ -49,21 +43,16 @@ a-scene {
         filterBeta: 0.01;
     "
     color-space="sRGB"
-    renderer="
-        colorManagement: true;
-        antialias: true;
-    "
+    renderer="colorManagement: true; antialias: true;"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false"
     embedded>
 
     <a-assets>
-
         <a-asset-item
             id="appleModel"
             src="./Apple.glb">
         </a-asset-item>
-
     </a-assets>
 
     <a-camera
@@ -91,908 +80,653 @@ a-scene {
 
 </a-scene>
 
-
 <script>
 
-/* =========================================================
-   ELEMENTS
-========================================================= */
+document.addEventListener("DOMContentLoaded", () => {
 
-const scene =
-    document.querySelector("a-scene");
+    const scene = document.querySelector("a-scene");
+    const target = document.querySelector("#imageTarget");
+    const appleContainer = document.querySelector("#appleContainer");
+    const apple = document.querySelector("#apple");
 
-const target =
-    document.querySelector("#imageTarget");
-
-const appleContainer =
-    document.querySelector("#appleContainer");
-
-
-/* =========================================================
-   SETTINGS
-========================================================= */
-
-const MIN_SCALE = 0.3;
-const MAX_SCALE = 3.0;
-
-
-/*
-    Higher value = faster 3D rotation.
-*/
-
-const ROTATION_SPEED = 1.8;
-
-
-/* =========================================================
-   TARGET ORIENTATION
-========================================================= */
-
-let currentMode = "vertical";
-
-let candidateMode = "vertical";
-
-let candidateFrames = 0;
-
-const ORIENTATION_CONFIRM_FRAMES = 12;
-
-const VERTICAL_THRESHOLD = 0.55;
-
-const FLOOR_THRESHOLD = 0.25;
-
-
-/* =========================================================
-   THREE.JS OBJECTS
-========================================================= */
-
-const targetQuaternion =
-    new THREE.Quaternion();
-
-const targetNormal =
-    new THREE.Vector3(0, 0, 1);
-
-const worldUp =
-    new THREE.Vector3(0, 1, 0);
-
-const rotatedNormal =
-    new THREE.Vector3();
-
-
-/*
-    User's complete 3D rotation.
-*/
-
-const userQuaternion =
-    new THREE.Quaternion();
-
-
-/*
-    Final rotation applied to Apple.
-*/
-
-const finalQuaternion =
-    new THREE.Quaternion();
-
-
-/*
-    Floor correction.
-*/
-
-const floorQuaternion =
-    new THREE.Quaternion();
-
-
-floorQuaternion.setFromAxisAngle(
-    new THREE.Vector3(1, 0, 0),
-    THREE.MathUtils.degToRad(-90)
-);
-
-
-/* =========================================================
-   SCALE
-========================================================= */
-
-let currentScale = 1;
-
-let initialScale = 1;
-
-let initialPinchDistance = null;
-
-
-/* =========================================================
-   POINTER TRACKING
-========================================================= */
-
-/*
-    Pointer events are used instead of separate mouse/touch
-    rotation systems.
-
-    This makes the exact same 3D trackball work on:
-
-    - phone
-    - tablet
-    - mouse
-    - touchscreen PC
-*/
-
-const pointers = new Map();
-
-let activeRotationPointer = null;
-
-let previousTrackballVector = null;
-
-
-/* =========================================================
-   TRACKBALL VECTOR
-========================================================= */
-
-function getTrackballVector(clientX, clientY) {
-
-    const width =
-        window.innerWidth;
-
-    const height =
-        window.innerHeight;
-
+    const THREE = AFRAME.THREE;
 
     /*
-        Convert screen coordinates to:
-
-        X = -1 ... +1
-        Y = -1 ... +1
+    ============================================================
+    AR ORIENTATION
+    ============================================================
     */
 
-    let x =
-        (clientX / width) * 2 - 1;
+    let currentMode = "vertical";
+    let pendingMode = "vertical";
+    let modeConfirmFrames = 0;
 
-    let y =
-        1 - (clientY / height) * 2;
-
-
-    /*
-        Keep the trackball proportional.
-    */
-
-    const size =
-        Math.min(width, height);
-
-
-    x =
-        x * width / size;
-
-
-    y =
-        y * height / size;
-
-
-    /*
-        Virtual sphere radius.
-    */
-
-    const radius = 1;
-
-
-    const lengthSquared =
-        x * x +
-        y * y;
-
-
-    let z;
-
-
-    if (lengthSquared <= radius * radius) {
-
-        z =
-            Math.sqrt(
-                radius * radius -
-                lengthSquared
-            );
-
-    } else {
-
-        /*
-            Outside the sphere, project onto
-            the edge instead of allowing unstable
-            values.
-        */
-
-        const length =
-            Math.sqrt(lengthSquared);
-
-        x /= length;
-        y /= length;
-        z = 0;
-
-    }
-
-
-    return new THREE.Vector3(
-        x,
-        y,
-        z
-    ).normalize();
-
-}
-
-
-/* =========================================================
-   TRACKBALL ROTATION
-========================================================= */
-
-function rotateTrackball(
-    previousVector,
-    currentVector
-) {
-
-    /*
-        Calculate rotation axis.
-
-        Cross product gives the axis perpendicular
-        to the two finger positions on the sphere.
-    */
-
-    const rotationAxis =
-        new THREE.Vector3()
-            .crossVectors(
-                previousVector,
-                currentVector
-            );
-
-
-    const axisLength =
-        rotationAxis.length();
-
-
-    /*
-        Almost no movement.
-    */
-
-    if (axisLength < 0.00001) {
-
-        return;
-
-    }
-
-
-    rotationAxis.normalize();
-
-
-    /*
-        Calculate angle between the two vectors.
-    */
-
-    let dot =
-        previousVector.dot(
-            currentVector
+    const FLOOR_CORRECTION =
+        new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(
+                -Math.PI / 2,
+                0,
+                0,
+                "XYZ"
+            )
         );
 
+    const worldUp = new THREE.Vector3(0, 1, 0);
+    const targetNormal = new THREE.Vector3(0, 0, 1);
+    const worldNormal = new THREE.Vector3();
 
-    dot =
-        THREE.MathUtils.clamp(
-            dot,
-            -1,
-            1
+    function updateTargetMode() {
+
+        if (!target.object3D) return;
+
+        target.object3D.getWorldQuaternion(
+            target.object3D.__worldQuaternion ||
+            (target.object3D.__worldQuaternion =
+                new THREE.Quaternion())
         );
 
-
-    let angle =
-        Math.acos(dot);
-
-
-    angle *= ROTATION_SPEED;
-
-
-    /*
-        Create quaternion representing
-        this drag movement.
-    */
-
-    const deltaQuaternion =
-        new THREE.Quaternion();
-
-
-    deltaQuaternion.setFromAxisAngle(
-        rotationAxis,
-        angle
-    );
-
-
-    /*
-        Add this rotation to the existing
-        Apple rotation.
-
-        This is the important part:
-
-        We are NOT only rotating Y anymore.
-
-        The Apple can rotate around ANY
-        direction indicated by the drag.
-    */
-
-    userQuaternion.premultiply(
-        deltaQuaternion
-    );
-
-
-    userQuaternion.normalize();
-
-
-    applyAppleRotation();
-
-}
-
-
-/* =========================================================
-   APPLY APPLE ROTATION
-========================================================= */
-
-function applyAppleRotation() {
-
-    /*
-        Start with the user's free 3D rotation.
-    */
-
-    finalQuaternion.copy(
-        userQuaternion
-    );
-
-
-    /*
-        If the target is lying on the floor,
-        apply the required target-plane correction.
-
-        This does NOT use accelerometer data.
-    */
-
-    if (currentMode === "floor") {
-
-        finalQuaternion.multiply(
-            floorQuaternion
-        );
-
-    }
-
-
-    appleContainer.object3D.quaternion.copy(
-        finalQuaternion
-    );
-
-
-    /*
-        Preserve scale.
-    */
-
-    appleContainer.object3D.scale.set(
-        currentScale,
-        currentScale,
-        currentScale
-    );
-
-}
-
-
-/* =========================================================
-   DETECT TARGET ORIENTATION
-========================================================= */
-
-function detectTargetMode() {
-
-    if (!target.object3D) {
-
-        return currentMode;
-
-    }
-
-
-    targetQuaternion.copy(
-        target.object3D.quaternion
-    );
-
-
-    /*
-        MindAR target local normal.
-    */
-
-    targetNormal.set(
-        0,
-        0,
-        1
-    );
-
-
-    rotatedNormal
-        .copy(targetNormal)
-        .applyQuaternion(
-            targetQuaternion
-        )
-        .normalize();
-
-
-    /*
-        Determine how close the target normal
-        is to world-up.
-
-        High value = floor.
-
-        Low value = vertical.
-    */
-
-    const verticalAmount =
-        Math.abs(
-            rotatedNormal.dot(worldUp)
-        );
-
-
-    if (
-        verticalAmount >
-        VERTICAL_THRESHOLD
-    ) {
-
-        return "floor";
-
-    }
-
-
-    if (
-        verticalAmount <
-        FLOOR_THRESHOLD
-    ) {
-
-        return "vertical";
-
-    }
-
-
-    return currentMode;
-
-}
-
-
-/* =========================================================
-   STABLE TARGET MODE
-========================================================= */
-
-function updateTargetMode() {
-
-    const detectedMode =
-        detectTargetMode();
-
-
-    if (
-        detectedMode ===
-        currentMode
-    ) {
-
-        candidateMode =
-            currentMode;
-
-        candidateFrames = 0;
-
-        return;
-
-    }
-
-
-    if (
-        detectedMode !==
-        candidateMode
-    ) {
-
-        candidateMode =
-            detectedMode;
-
-        candidateFrames = 1;
-
-        return;
-
-    }
-
-
-    candidateFrames++;
-
-
-    if (
-        candidateFrames >=
-        ORIENTATION_CONFIRM_FRAMES
-    ) {
-
-        currentMode =
-            candidateMode;
-
-        candidateFrames = 0;
-
-        applyAppleRotation();
-
-    }
-
-}
-
-
-/* =========================================================
-   POINTER DOWN
-========================================================= */
-
-document.addEventListener(
-    "pointerdown",
-    function(event) {
-
-        /*
-            Only primary mouse button.
-        */
-
-        if (
-            event.pointerType === "mouse" &&
-            event.button !== 0
-        ) {
-
-            return;
-
+        const targetQuaternion =
+            target.object3D.__worldQuaternion;
+
+        worldNormal
+            .copy(targetNormal)
+            .applyQuaternion(targetQuaternion)
+            .normalize();
+
+        const verticalDot =
+            Math.abs(worldNormal.dot(worldUp));
+
+        let detectedMode;
+
+        if (verticalDot > 0.55) {
+            detectedMode = "floor";
+        }
+        else if (verticalDot < 0.25) {
+            detectedMode = "vertical";
+        }
+        else {
+            detectedMode = currentMode;
         }
 
+        if (detectedMode !== pendingMode) {
 
-        pointers.set(
-            event.pointerId,
-            event
-        );
+            pendingMode = detectedMode;
+            modeConfirmFrames = 0;
 
+        }
+        else {
+
+            modeConfirmFrames++;
+
+            if (
+                modeConfirmFrames >= 12 &&
+                currentMode !== pendingMode
+            ) {
+
+                currentMode = pendingMode;
+            }
+        }
+    }
+
+
+    /*
+    ============================================================
+    USER ROTATION
+    ============================================================
+    */
+
+    const userQuaternion =
+        new THREE.Quaternion();
+
+    let pointerPositions = new Map();
+
+    let isRotating = false;
+
+    let previousTrackball =
+        new THREE.Vector3();
+
+    let rotationPointerId = null;
+
+    /*
+    Convert screen position into a virtual trackball.
+    This allows horizontal, vertical AND diagonal
+    finger movement to produce true 3D rotation.
+    */
+
+    function getTrackballVector(x, y) {
+
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        let nx =
+            (2 * x - width) /
+            Math.min(width, height);
+
+        let ny =
+            (height - 2 * y) /
+            Math.min(width, height);
+
+        const lengthSquared =
+            nx * nx + ny * ny;
+
+        let z;
+
+        if (lengthSquared <= 1) {
+
+            z = Math.sqrt(
+                1 - lengthSquared
+            );
+
+        }
+        else {
+
+            const length =
+                Math.sqrt(lengthSquared);
+
+            nx /= length;
+            ny /= length;
+
+            z = 0;
+        }
+
+        return new THREE.Vector3(
+            nx,
+            ny,
+            z
+        ).normalize();
+    }
+
+
+    /*
+    ============================================================
+    APPLY ROTATION
+    ============================================================
+    */
+
+    function applyAppleRotation() {
+
+        const finalQuaternion =
+            userQuaternion.clone();
 
         /*
-            One pointer = rotation.
+        If target is lying on the floor,
+        rotate the Apple upright relative to the floor.
+        */
+
+        if (currentMode === "floor") {
+
+            finalQuaternion.multiply(
+                FLOOR_CORRECTION
+            );
+        }
+
+        appleContainer.object3D.quaternion.copy(
+            finalQuaternion
+        );
+    }
+
+
+    /*
+    ============================================================
+    POINTER DOWN
+    ============================================================
+    */
+
+    function onPointerDown(event) {
+
+        pointerPositions.set(
+            event.pointerId,
+            {
+                x: event.clientX,
+                y: event.clientY
+            }
+        );
+
+        /*
+        Only begin rotation when there is
+        exactly one active pointer.
         */
 
         if (
-            pointers.size === 1
+            pointerPositions.size === 1
         ) {
 
-            activeRotationPointer =
+            rotationPointerId =
                 event.pointerId;
 
-
-            previousTrackballVector =
+            previousTrackball =
                 getTrackballVector(
                     event.clientX,
                     event.clientY
                 );
 
-
-            try {
-
-                event.target.setPointerCapture(
-                    event.pointerId
-                );
-
-            } catch (error) {}
-
+            isRotating = true;
         }
 
-
-        /*
-            Two pointers = pinch.
-        */
-
-        if (
-            pointers.size === 2
-        ) {
-
-            activeRotationPointer =
-                null;
-
-            previousTrackballVector =
-                null;
-
-
-            const values =
-                Array.from(
-                    pointers.values()
-                );
-
-
-            initialPinchDistance =
-                getDistance(
-                    values[0],
-                    values[1]
-                );
-
-
-            initialScale =
-                currentScale;
-
-        }
-
-    },
-    {
-        passive: false
+        event.preventDefault();
     }
-);
 
 
-/* =========================================================
-   POINTER MOVE
-========================================================= */
+    /*
+    ============================================================
+    POINTER MOVE
+    ============================================================
+    */
 
-document.addEventListener(
-    "pointermove",
-    function(event) {
+    function onPointerMove(event) {
 
         if (
-            !pointers.has(
+            !pointerPositions.has(
                 event.pointerId
             )
         ) {
-
             return;
-
         }
 
-
-        pointers.set(
+        pointerPositions.set(
             event.pointerId,
-            event
+            {
+                x: event.clientX,
+                y: event.clientY
+            }
         );
 
-
         /*
-            TWO POINTERS = PINCH
+        If two fingers are active,
+        rotation is temporarily disabled.
+        This leaves the gesture available
+        for pinch resizing.
         */
 
-        if (
-            pointers.size === 2
-        ) {
+        if (pointerPositions.size !== 1) {
+
+            isRotating = false;
 
             event.preventDefault();
-
-
-            const values =
-                Array.from(
-                    pointers.values()
-                );
-
-
-            const distance =
-                getDistance(
-                    values[0],
-                    values[1]
-                );
-
-
-            if (
-                initialPinchDistance ===
-                null
-            ) {
-
-                initialPinchDistance =
-                    distance;
-
-                initialScale =
-                    currentScale;
-
-                return;
-
-            }
-
-
-            const scaleFactor =
-                distance /
-                initialPinchDistance;
-
-
-            let newScale =
-                initialScale *
-                scaleFactor;
-
-
-            newScale =
-                THREE.MathUtils.clamp(
-                    newScale,
-                    MIN_SCALE,
-                    MAX_SCALE
-                );
-
-
-            currentScale =
-                newScale;
-
-
-            appleContainer.object3D.scale.set(
-                newScale,
-                newScale,
-                newScale
-            );
-
 
             return;
-
         }
-
-
-        /*
-            ONE POINTER = FREE ROTATION
-        */
 
         if (
-            pointers.size === 1 &&
-            event.pointerId ===
-            activeRotationPointer
+            !isRotating ||
+            rotationPointerId !==
+            event.pointerId
         ) {
-
-            event.preventDefault();
-
-
-            const currentVector =
-                getTrackballVector(
-                    event.clientX,
-                    event.clientY
-                );
-
-
-            if (
-                previousTrackballVector
-            ) {
-
-                rotateTrackball(
-                    previousTrackballVector,
-                    currentVector
-                );
-
-            }
-
-
-            previousTrackballVector =
-                currentVector;
-
+            return;
         }
 
-    },
-    {
-        passive: false
-    }
-);
-
-
-/* =========================================================
-   POINTER UP
-========================================================= */
-
-function endPointer(event) {
-
-    pointers.delete(
-        event.pointerId
-    );
-
-
-    /*
-        No pointers left.
-    */
-
-    if (
-        pointers.size === 0
-    ) {
-
-        activeRotationPointer =
-            null;
-
-        previousTrackballVector =
-            null;
-
-        initialPinchDistance =
-            null;
-
-    }
-
-
-    /*
-        One pointer remains after pinch.
-
-        Start a fresh rotation from its
-        current position.
-
-        This prevents a sudden jump.
-    */
-
-    if (
-        pointers.size === 1
-    ) {
-
-        const remaining =
-            Array.from(
-                pointers.values()
-            )[0];
-
-
-        activeRotationPointer =
-            remaining.pointerId;
-
-
-        previousTrackballVector =
+        const currentTrackball =
             getTrackballVector(
-                remaining.clientX,
-                remaining.clientY
+                event.clientX,
+                event.clientY
             );
 
+        /*
+        IMPORTANT:
+        The cross product order is reversed
+        so the Apple follows the direction
+        of the finger instead of rotating opposite
+        to it.
+        */
 
-        initialPinchDistance =
-            null;
+        const axis =
+            new THREE.Vector3()
+                .crossVectors(
+                    currentTrackball,
+                    previousTrackball
+                )
+                .normalize();
 
+        const dot =
+            THREE.MathUtils.clamp(
+                previousTrackball.dot(
+                    currentTrackball
+                ),
+                -1,
+                1
+            );
+
+        const angle =
+            Math.acos(dot);
+
+        if (
+            axis.lengthSq() > 0.0000001 &&
+            angle > 0.00001
+        ) {
+
+            const deltaQuaternion =
+                new THREE.Quaternion();
+
+            deltaQuaternion.setFromAxisAngle(
+                axis,
+                angle
+            );
+
+            /*
+            Accumulate the user's rotation.
+            */
+
+            userQuaternion.premultiply(
+                deltaQuaternion
+            );
+
+            userQuaternion.normalize();
+
+            applyAppleRotation();
+        }
+
+        previousTrackball.copy(
+            currentTrackball
+        );
+
+        event.preventDefault();
     }
 
-}
+
+    /*
+    ============================================================
+    POINTER UP
+    ============================================================
+    */
+
+    function onPointerUp(event) {
+
+        pointerPositions.delete(
+            event.pointerId
+        );
+
+        if (
+            rotationPointerId ===
+            event.pointerId
+        ) {
+
+            rotationPointerId = null;
+            isRotating = false;
+        }
+
+        /*
+        If another pointer remains,
+        don't immediately start a new rotation.
+        This prevents sudden jumps after
+        pinch gestures.
+        */
+
+        event.preventDefault();
+    }
 
 
-document.addEventListener(
-    "pointerup",
-    endPointer
-);
+    /*
+    ============================================================
+    POINTER CANCEL
+    ============================================================
+    */
+
+    function onPointerCancel(event) {
+
+        pointerPositions.delete(
+            event.pointerId
+        );
+
+        if (
+            rotationPointerId ===
+            event.pointerId
+        ) {
+
+            rotationPointerId = null;
+            isRotating = false;
+        }
+    }
 
 
-document.addEventListener(
-    "pointercancel",
-    endPointer
-);
+    /*
+    ============================================================
+    PINCH TO RESIZE
+    ============================================================
+    */
+
+    let initialPinchDistance = null;
+    let initialScale = 1;
+
+    function getDistance(a, b) {
+
+        const dx =
+            a.x - b.x;
+
+        const dy =
+            a.y - b.y;
+
+        return Math.sqrt(
+            dx * dx + dy * dy
+        );
+    }
 
 
-/* =========================================================
-   PINCH DISTANCE
-========================================================= */
+    function handlePinch() {
 
-function getDistance(
-    pointA,
-    pointB
-) {
+        if (
+            pointerPositions.size !== 2
+        ) {
 
-    const dx =
-        pointA.clientX -
-        pointB.clientX;
+            initialPinchDistance = null;
+
+            return;
+        }
+
+        const points =
+            Array.from(
+                pointerPositions.values()
+            );
+
+        const p1 = points[0];
+        const p2 = points[1];
+
+        const distance =
+            getDistance(p1, p2);
+
+        if (
+            initialPinchDistance === null
+        ) {
+
+            initialPinchDistance =
+                distance;
+
+            initialScale =
+                appleContainer.object3D.scale.x;
+
+            return;
+        }
+
+        if (
+            initialPinchDistance <= 0
+        ) {
+            return;
+        }
+
+        let newScale =
+            initialScale *
+            (distance /
+             initialPinchDistance);
+
+        newScale =
+            THREE.MathUtils.clamp(
+                newScale,
+                0.3,
+                3.0
+            );
+
+        appleContainer.object3D.scale.set(
+            newScale,
+            newScale,
+            newScale
+        );
+    }
 
 
-    const dy =
-        pointA.clientY -
-        pointB.clientY;
+    /*
+    ============================================================
+    POINTER EVENTS
+    ============================================================
+    */
+
+    const canvas =
+        scene.canvas ||
+        document.querySelector(
+            "canvas"
+        );
+
+    function setupPointerEvents() {
+
+        const element =
+            scene.canvas ||
+            document.querySelector(
+                "canvas"
+            );
+
+        if (!element) {
+
+            requestAnimationFrame(
+                setupPointerEvents
+            );
+
+            return;
+        }
+
+        element.style.touchAction =
+            "none";
+
+        element.addEventListener(
+            "pointerdown",
+            onPointerDown,
+            {
+                passive: false
+            }
+        );
+
+        element.addEventListener(
+            "pointermove",
+            onPointerMove,
+            {
+                passive: false
+            }
+        );
+
+        element.addEventListener(
+            "pointerup",
+            onPointerUp,
+            {
+                passive: false
+            }
+        );
+
+        element.addEventListener(
+            "pointercancel",
+            onPointerCancel,
+            {
+                passive: false
+            }
+        );
+
+        /*
+        Separate listener for pinch.
+        */
+
+        element.addEventListener(
+            "pointermove",
+            () => {
+                handlePinch();
+            },
+            {
+                passive: true
+            }
+        );
+
+        /*
+        Prevent browser gestures.
+        */
+
+        element.addEventListener(
+            "gesturestart",
+            event => {
+                event.preventDefault();
+            },
+            {
+                passive: false
+            }
+        );
+
+        element.addEventListener(
+            "gesturechange",
+            event => {
+                event.preventDefault();
+            },
+            {
+                passive: false
+            }
+        );
+
+        element.addEventListener(
+            "gestureend",
+            event => {
+                event.preventDefault();
+            },
+            {
+                passive: false
+            }
+        );
+    }
 
 
-    return Math.sqrt(
-        dx * dx +
-        dy * dy
+    /*
+    ============================================================
+    INITIALIZE
+    ============================================================
+    */
+
+    scene.addEventListener(
+        "loaded",
+        () => {
+
+            setupPointerEvents();
+
+        }
     );
 
-}
 
+    /*
+    ============================================================
+    AR UPDATE LOOP
+    ============================================================
+    */
 
-/* =========================================================
-   AR UPDATE LOOP
-========================================================= */
+    function updateAR() {
 
-function updateAR() {
+        if (
+            target.object3D &&
+            target.object3D.visible
+        ) {
 
-    if (
-        target.object3D.visible
-    ) {
+            updateTargetMode();
 
-        updateTargetMode();
+            applyAppleRotation();
+        }
 
+        requestAnimationFrame(
+            updateAR
+        );
     }
 
+
+    /*
+    ============================================================
+    START
+    ============================================================
+    */
 
     requestAnimationFrame(
         updateAR
     );
 
-}
-
-
-/* =========================================================
-   START
-========================================================= */
-
-scene.addEventListener(
-    "loaded",
-    function() {
-
-        requestAnimationFrame(
-            updateAR
-        );
-
-    }
-);
-
+});
 </script>
 
 </body>
