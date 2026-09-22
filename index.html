@@ -1,13 +1,25 @@
+```html
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
     <title>Apple AR</title>
 
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            touch-action: none;
+        }
+    </style>
 </head>
 
 <body>
@@ -34,15 +46,283 @@
     <a-entity mindar-image-target="targetIndex: 0">
 
         <a-gltf-model
+            id="apple"
+            class="interactive-apple"
             src="#appleModel"
             position="0 0 0"
-            rotation="0 0 0"
-            scale="0.5 0.5 0.5">
+            rotation="-90 0 0"
+            scale="2 2 2">
         </a-gltf-model>
 
     </a-entity>
 
 </a-scene>
 
+
+<script>
+
+const apple = document.querySelector("#apple");
+const scene = document.querySelector("a-scene");
+
+let rotating = false;
+let lastX = 0;
+
+let initialPinchDistance = null;
+let initialScale = 0.5;
+
+
+// Wait until A-Frame is ready
+scene.addEventListener("loaded", () => {
+
+    const canvas = scene.canvas;
+
+    // --------------------------------------------------
+    // GET SCREEN POSITION
+    // --------------------------------------------------
+
+    function getPointerPosition(event) {
+
+        const rect = canvas.getBoundingClientRect();
+
+        let clientX;
+        let clientY;
+
+        if (event.touches && event.touches.length > 0) {
+            clientX = event.touches[0].clientX;
+            clientY = event.touches[0].clientY;
+        } else {
+            clientX = event.clientX;
+            clientY = event.clientY;
+        }
+
+        return {
+            x: ((clientX - rect.left) / rect.width) * 2 - 1,
+            y: -((clientY - rect.top) / rect.height) * 2 + 1
+        };
+    }
+
+
+    // --------------------------------------------------
+    // CHECK IF USER TOUCHED THE APPLE
+    // --------------------------------------------------
+
+    function isAppleTouched(event) {
+
+        if (!apple.object3D) {
+            return false;
+        }
+
+        const pointer = getPointerPosition(event);
+
+        const camera = scene.camera;
+
+        const raycaster = new THREE.Raycaster();
+
+        raycaster.setFromCamera(
+            new THREE.Vector2(pointer.x, pointer.y),
+            camera
+        );
+
+        const objects = [];
+
+        apple.object3D.traverse(function(object) {
+
+            if (object.isMesh) {
+                objects.push(object);
+            }
+
+        });
+
+        const intersections = raycaster.intersectObjects(objects, true);
+
+        return intersections.length > 0;
+    }
+
+
+    // --------------------------------------------------
+    // TOUCH START
+    // --------------------------------------------------
+
+    canvas.addEventListener("touchstart", function(event) {
+
+        // TWO FINGERS = PINCH
+        if (event.touches.length === 2) {
+
+            event.preventDefault();
+
+            const dx =
+                event.touches[0].clientX -
+                event.touches[1].clientX;
+
+            const dy =
+                event.touches[0].clientY -
+                event.touches[1].clientY;
+
+            initialPinchDistance = Math.sqrt(
+                dx * dx + dy * dy
+            );
+
+            initialScale = apple.object3D.scale.x;
+
+            rotating = false;
+
+            return;
+        }
+
+
+        // ONE FINGER = ROTATE
+        if (event.touches.length === 1) {
+
+            if (isAppleTouched(event)) {
+
+                event.preventDefault();
+
+                rotating = true;
+
+                lastX = event.touches[0].clientX;
+            }
+        }
+
+    }, { passive: false });
+
+
+    // --------------------------------------------------
+    // TOUCH MOVE
+    // --------------------------------------------------
+
+    canvas.addEventListener("touchmove", function(event) {
+
+        // TWO FINGER PINCH
+        if (
+            event.touches.length === 2 &&
+            initialPinchDistance !== null
+        ) {
+
+            event.preventDefault();
+
+            const dx =
+                event.touches[0].clientX -
+                event.touches[1].clientX;
+
+            const dy =
+                event.touches[0].clientY -
+                event.touches[1].clientY;
+
+            const currentDistance = Math.sqrt(
+                dx * dx + dy * dy
+            );
+
+            const scaleFactor =
+                currentDistance / initialPinchDistance;
+
+            let newScale =
+                initialScale * scaleFactor;
+
+            // Limit the size
+            newScale = Math.max(
+                0.15,
+                Math.min(2.0, newScale)
+            );
+
+            apple.object3D.scale.set(
+                newScale,
+                newScale,
+                newScale
+            );
+
+            return;
+        }
+
+
+        // ONE FINGER ROTATION
+        if (
+            event.touches.length === 1 &&
+            rotating
+        ) {
+
+            event.preventDefault();
+
+            const currentX =
+                event.touches[0].clientX;
+
+            const movement =
+                currentX - lastX;
+
+            // Rotation sensitivity
+            apple.object3D.rotation.y -= movement * 0.01;
+
+            lastX = currentX;
+        }
+
+    }, { passive: false });
+
+
+    // --------------------------------------------------
+    // TOUCH END
+    // --------------------------------------------------
+
+    canvas.addEventListener("touchend", function(event) {
+
+        if (event.touches.length === 0) {
+
+            rotating = false;
+            initialPinchDistance = null;
+
+        }
+
+    });
+
+
+    // --------------------------------------------------
+    // MOUSE DRAG FOR PC TESTING
+    // --------------------------------------------------
+
+    canvas.addEventListener("mousedown", function(event) {
+
+        if (isAppleTouched(event)) {
+
+            rotating = true;
+
+            lastX = event.clientX;
+
+        }
+
+    });
+
+
+    canvas.addEventListener("mousemove", function(event) {
+
+        if (!rotating) {
+            return;
+        }
+
+        const movement =
+            event.clientX - lastX;
+
+        apple.object3D.rotation.y -= movement * 0.01;
+
+        lastX = event.clientX;
+
+    });
+
+
+    canvas.addEventListener("mouseup", function() {
+
+        rotating = false;
+
+    });
+
+
+    canvas.addEventListener("mouseleave", function() {
+
+        rotating = false;
+
+    });
+
+});
+
+</script>
+
 </body>
 </html>
+```
