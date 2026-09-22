@@ -3,15 +3,21 @@
 <html>
 <head>
     <meta charset="UTF-8">
+
     <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        content="width=device-width,
+                 initial-scale=1.0,
+                 maximum-scale=1.0,
+                 user-scalable=no">
 
     <title>Apple AR</title>
 
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
     <style>
+
         html, body {
             margin: 0;
             padding: 0;
@@ -21,146 +27,269 @@
             touch-action: none;
         }
 
-        #permissionButton {
+        #motionButton {
             position: fixed;
             z-index: 9999;
+
             left: 50%;
             top: 50%;
+
             transform: translate(-50%, -50%);
-            padding: 16px 22px;
+
+            padding: 15px 22px;
+
             border: none;
             border-radius: 10px;
+
             background: white;
             color: black;
+
             font-size: 16px;
             font-weight: bold;
+
             display: none;
         }
+
     </style>
 </head>
 
+
 <body>
 
-<button id="permissionButton">
+
+<button id="motionButton">
     Enable Motion
 </button>
 
+
 <a-scene
-    mindar-image="imageTargetSrc: ./targets.mind; autoStart: true;"
+
+    mindar-image="
+        imageTargetSrc: ./targets.mind;
+        autoStart: true;
+    "
+
     color-space="sRGB"
-    renderer="colorManagement: true"
-    vr-mode-ui="enabled: false"
-    device-orientation-permission-ui="enabled: false">
+
+    renderer="
+        colorManagement: true
+    "
+
+    vr-mode-ui="
+        enabled: false
+    "
+
+    device-orientation-permission-ui="
+        enabled: false
+    "
+
+>
+
 
     <a-assets>
+
         <a-asset-item
             id="appleModel"
             src="./Apple.glb">
         </a-asset-item>
+
     </a-assets>
 
+
     <a-camera
+
         position="0 0 0"
-        look-controls="enabled: false">
+
+        look-controls="
+            enabled: false
+        ">
+
     </a-camera>
+
+
+    <!-- IMAGE TARGET -->
 
     <a-entity
         id="target"
-        mindar-image-target="targetIndex: 0">
+        mindar-image-target="
+            targetIndex: 0
+        ">
 
-        <a-entity id="uprightContainer">
+
+        <!--
+
+            This container is NOT scaled.
+
+            The Apple itself keeps its original
+            Blender dimensions.
+
+        -->
+
+        <a-entity
+            id="uprightContainer">
+
+
+            <!--
+
+                Blender model = 0.8 meters
+
+                scale 1 = original GLB size
+
+            -->
 
             <a-gltf-model
+
                 id="apple"
+
                 src="#appleModel"
+
                 position="0 0 0"
+
                 rotation="0 0 0"
-                scale="0.5 0.5 0.5">
+
+                scale="1 1 1">
+
             </a-gltf-model>
+
 
         </a-entity>
 
+
     </a-entity>
+
 
 </a-scene>
 
 
 <script>
 
-const scene = document.querySelector("a-scene");
-const target = document.querySelector("#target");
-const container = document.querySelector("#uprightContainer");
-const apple = document.querySelector("#apple");
 
-const permissionButton =
-    document.querySelector("#permissionButton");
+// =====================================================
+// ELEMENTS
+// =====================================================
+
+const scene =
+    document.querySelector("a-scene");
+
+const target =
+    document.querySelector("#target");
+
+const container =
+    document.querySelector("#uprightContainer");
+
+const apple =
+    document.querySelector("#apple");
+
+const motionButton =
+    document.querySelector("#motionButton");
 
 
-// ======================================================
-// APPLE INTERACTION
-// ======================================================
+// =====================================================
+// ROTATION
+// =====================================================
 
 let rotating = false;
+
 let lastX = 0;
 
+
+// =====================================================
+// PINCH
+// =====================================================
+
 let initialPinchDistance = null;
-let initialScale = 0.5;
+
+let initialScale = 1;
 
 
-// ======================================================
-// DEVICE ORIENTATION
-// ======================================================
+// =====================================================
+// GRAVITY
+// =====================================================
 
-let deviceAlpha = 0;
-let deviceBeta = 0;
-let deviceGamma = 0;
+let gravityX = 0;
+
+let gravityY = -9.8;
+
+let gravityZ = 0;
+
+let gravityAvailable = false;
+
+
+// =====================================================
+// MOTION PERMISSION
+// =====================================================
 
 let motionPermissionGranted = false;
 
 
-// ------------------------------------------------------
-// REQUEST MOTION PERMISSION
-// ------------------------------------------------------
+// =====================================================
+// REQUEST MOTION
+// =====================================================
 
 async function requestMotionPermission() {
 
     try {
 
+        // iPhone / iPad
+
         if (
-            typeof DeviceOrientationEvent !== "undefined" &&
-            typeof DeviceOrientationEvent.requestPermission === "function"
+
+            typeof DeviceMotionEvent !== "undefined" &&
+
+            typeof DeviceMotionEvent.requestPermission ===
+            "function"
+
         ) {
 
             const permission =
-                await DeviceOrientationEvent.requestPermission();
+                await DeviceMotionEvent.requestPermission();
+
 
             if (permission === "granted") {
 
                 motionPermissionGranted = true;
 
                 window.addEventListener(
-                    "deviceorientation",
-                    handleOrientation,
+
+                    "devicemotion",
+
+                    handleMotion,
+
                     true
+
                 );
 
-                permissionButton.style.display = "none";
+                motionButton.style.display =
+                    "none";
+
             }
 
-        } else {
+        }
+
+        // Android / other browsers
+
+        else {
 
             motionPermissionGranted = true;
 
             window.addEventListener(
-                "deviceorientation",
-                handleOrientation,
+
+                "devicemotion",
+
+                handleMotion,
+
                 true
+
             );
 
-            permissionButton.style.display = "none";
+            motionButton.style.display =
+                "none";
+
         }
 
-    } catch (error) {
+    }
+
+    catch (error) {
 
         console.log(
             "Motion permission error:",
@@ -168,98 +297,250 @@ async function requestMotionPermission() {
         );
 
     }
+
 }
 
 
-permissionButton.addEventListener(
+motionButton.addEventListener(
+
     "click",
+
     requestMotionPermission
+
 );
 
 
-// ======================================================
-// DEVICE ORIENTATION SENSOR
-// ======================================================
+// =====================================================
+// DEVICE MOTION
+// =====================================================
 
-function handleOrientation(event) {
+function handleMotion(event) {
 
-    if (event.alpha !== null) {
-        deviceAlpha = event.alpha;
-    }
 
-    if (event.beta !== null) {
-        deviceBeta = event.beta;
-    }
+    // Gravity provided directly by browser
 
-    if (event.gamma !== null) {
-        deviceGamma = event.gamma;
+    if (
+        event.accelerationIncludingGravity
+    ) {
+
+        const g =
+            event.accelerationIncludingGravity;
+
+
+        if (
+            g.x !== null &&
+            g.y !== null &&
+            g.z !== null
+        ) {
+
+            gravityX = g.x;
+
+            gravityY = g.y;
+
+            gravityZ = g.z;
+
+            gravityAvailable = true;
+
+        }
+
     }
 
 }
 
 
-// ======================================================
-// START MOTION SENSOR
-// ======================================================
+// =====================================================
+// SETUP MOTION
+// =====================================================
 
 function setupMotion() {
 
+
     if (
-        typeof DeviceOrientationEvent !== "undefined" &&
-        typeof DeviceOrientationEvent.requestPermission === "function"
+
+        typeof DeviceMotionEvent !== "undefined" &&
+
+        typeof DeviceMotionEvent.requestPermission ===
+        "function"
+
     ) {
 
-        permissionButton.style.display = "block";
+        // iOS requires user interaction
 
-    } else {
+        motionButton.style.display =
+            "block";
+
+    }
+
+    else {
 
         window.addEventListener(
-            "deviceorientation",
-            handleOrientation,
+
+            "devicemotion",
+
+            handleMotion,
+
             true
+
         );
 
         motionPermissionGranted = true;
+
     }
 
 }
 
 
-// ======================================================
-// FIND SCREEN POSITION
-// ======================================================
+// =====================================================
+// APPLY GRAVITY UPRIGHT
+// =====================================================
+
+function updateUpright() {
+
+
+    if (!gravityAvailable) {
+        return;
+    }
+
+
+    const length = Math.sqrt(
+
+        gravityX * gravityX +
+
+        gravityY * gravityY +
+
+        gravityZ * gravityZ
+
+    );
+
+
+    if (length < 0.01) {
+        return;
+    }
+
+
+    // Normalize gravity
+
+    const gx =
+        gravityX / length;
+
+    const gy =
+        gravityY / length;
+
+    const gz =
+        gravityZ / length;
+
+
+    /*
+        We want the Apple local Y axis
+        to point opposite gravity.
+
+        This creates the "standing" direction.
+    */
+
+
+    const upX = -gx;
+
+    const upY = -gy;
+
+    const upZ = -gz;
+
+
+    /*
+        Calculate the pitch and roll required
+        to point the Apple upward.
+
+        Yaw is deliberately NOT changed.
+
+        That means the user can still rotate
+        the Apple horizontally with their finger.
+    */
+
+
+    const pitch =
+        Math.atan2(
+            upZ,
+            Math.sqrt(
+                upX * upX +
+                upY * upY
+            )
+        );
+
+
+    const roll =
+        Math.atan2(
+            -upX,
+            upY
+        );
+
+
+    /*
+        Apply only the upright correction.
+
+        User-controlled Y rotation remains
+        independent.
+    */
+
+
+    container.object3D.rotation.x =
+        pitch;
+
+    container.object3D.rotation.z =
+        roll;
+
+}
+
+
+// =====================================================
+// POINTER POSITION
+// =====================================================
 
 function getPointerPosition(event) {
 
-    const canvas = scene.canvas;
-    const rect = canvas.getBoundingClientRect();
 
-    let clientX;
-    let clientY;
+    const canvas =
+        scene.canvas;
+
+    const rect =
+        canvas.getBoundingClientRect();
+
+
+    let x;
+
+    let y;
+
 
     if (
         event.touches &&
         event.touches.length > 0
     ) {
 
-        clientX = event.touches[0].clientX;
-        clientY = event.touches[0].clientY;
+        x =
+            event.touches[0].clientX;
 
-    } else {
-
-        clientX = event.clientX;
-        clientY = event.clientY;
+        y =
+            event.touches[0].clientY;
 
     }
+
+    else {
+
+        x =
+            event.clientX;
+
+        y =
+            event.clientY;
+
+    }
+
 
     return {
 
         x:
-            ((clientX - rect.left) /
+            ((x - rect.left) /
             rect.width) * 2 - 1,
 
         y:
-            -((clientY - rect.top) /
+            -((y - rect.top) /
             rect.height) * 2 + 1
 
     };
@@ -267,97 +548,141 @@ function getPointerPosition(event) {
 }
 
 
-// ======================================================
-// CHECK WHETHER APPLE WAS TOUCHED
-// ======================================================
+// =====================================================
+// CHECK APPLE
+// =====================================================
 
 function isAppleTouched(event) {
+
 
     if (!apple.object3D) {
         return false;
     }
 
+
     const pointer =
         getPointerPosition(event);
+
 
     const camera =
         scene.camera;
 
+
     const raycaster =
         new THREE.Raycaster();
 
+
     raycaster.setFromCamera(
+
         new THREE.Vector2(
+
             pointer.x,
+
             pointer.y
+
         ),
+
         camera
+
     );
 
-    const objects = [];
+
+    const meshes = [];
+
 
     apple.object3D.traverse(
+
         function(object) {
 
             if (object.isMesh) {
-                objects.push(object);
+
+                meshes.push(object);
+
             }
 
         }
+
     );
 
-    const intersections =
+
+    const hits =
         raycaster.intersectObjects(
-            objects,
+
+            meshes,
+
             true
+
         );
 
-    return intersections.length > 0;
+
+    return hits.length > 0;
 
 }
 
 
-// ======================================================
+// =====================================================
 // TOUCH START
-// ======================================================
+// =====================================================
 
 function touchStart(event) {
 
+
     // TWO FINGERS
-    if (event.touches.length === 2) {
+
+    if (
+        event.touches.length === 2
+    ) {
 
         event.preventDefault();
+
 
         const dx =
             event.touches[0].clientX -
             event.touches[1].clientX;
 
+
         const dy =
             event.touches[0].clientY -
             event.touches[1].clientY;
 
+
         initialPinchDistance =
             Math.sqrt(
-                dx * dx + dy * dy
+
+                dx * dx +
+                dy * dy
+
             );
+
 
         initialScale =
             apple.object3D.scale.x;
 
+
         rotating = false;
 
+
         return;
+
     }
 
 
     // ONE FINGER
-    if (event.touches.length === 1) {
 
-        if (isAppleTouched(event)) {
+    if (
+        event.touches.length === 1
+    ) {
+
+
+        if (
+            isAppleTouched(event)
+        ) {
 
             event.preventDefault();
 
+
             rotating = true;
+
 
             lastX =
                 event.touches[0].clientX;
@@ -369,91 +694,125 @@ function touchStart(event) {
 }
 
 
-// ======================================================
+// =====================================================
 // TOUCH MOVE
-// ======================================================
+// =====================================================
 
 function touchMove(event) {
 
+
     // PINCH
+
     if (
+
         event.touches.length === 2 &&
+
         initialPinchDistance !== null
+
     ) {
 
         event.preventDefault();
+
 
         const dx =
             event.touches[0].clientX -
             event.touches[1].clientX;
 
+
         const dy =
             event.touches[0].clientY -
             event.touches[1].clientY;
 
-        const currentDistance =
+
+        const distance =
             Math.sqrt(
-                dx * dx + dy * dy
+
+                dx * dx +
+                dy * dy
+
             );
 
-        const scaleFactor =
-            currentDistance /
+
+        const factor =
+            distance /
             initialPinchDistance;
+
 
         let newScale =
             initialScale *
-            scaleFactor;
+            factor;
+
 
         newScale =
             Math.max(
+
                 0.15,
+
                 Math.min(
                     2.0,
                     newScale
                 )
+
             );
 
+
         apple.object3D.scale.set(
+
             newScale,
             newScale,
             newScale
+
         );
 
+
         return;
+
     }
 
 
-    // ROTATE
+    // ROTATION
+
     if (
+
         event.touches.length === 1 &&
+
         rotating
+
     ) {
 
         event.preventDefault();
 
+
         const currentX =
             event.touches[0].clientX;
+
 
         const movement =
             currentX - lastX;
 
+
         apple.object3D.rotation.y -=
             movement * 0.01;
 
-        lastX = currentX;
+
+        lastX =
+            currentX;
 
     }
 
 }
 
 
-// ======================================================
+// =====================================================
 // TOUCH END
-// ======================================================
+// =====================================================
 
 function touchEnd(event) {
 
-    if (event.touches.length === 0) {
+
+    if (
+        event.touches.length === 0
+    ) {
 
         rotating = false;
 
@@ -464,17 +823,21 @@ function touchEnd(event) {
 }
 
 
-// ======================================================
-// MOUSE CONTROL FOR PC
-// ======================================================
+// =====================================================
+// MOUSE
+// =====================================================
 
 function mouseDown(event) {
 
-    if (isAppleTouched(event)) {
+
+    if (
+        isAppleTouched(event)
+    ) {
 
         rotating = true;
 
-        lastX = event.clientX;
+        lastX =
+            event.clientX;
 
     }
 
@@ -483,17 +846,22 @@ function mouseDown(event) {
 
 function mouseMove(event) {
 
+
     if (!rotating) {
         return;
     }
 
+
     const movement =
         event.clientX - lastX;
+
 
     apple.object3D.rotation.y -=
         movement * 0.01;
 
-    lastX = event.clientX;
+
+    lastX =
+        event.clientX;
 
 }
 
@@ -505,115 +873,104 @@ function mouseUp() {
 }
 
 
-// ======================================================
-// APPLY UPRIGHT COMPENSATION
-// ======================================================
-
-function updateUprightOrientation() {
-
-    if (!motionPermissionGranted) {
-        return;
-    }
-
-    /*
-       The target itself follows the physical image.
-
-       The container receives a correction based on the
-       device's pitch and roll so the Apple remains
-       visually upright relative to gravity.
-    */
-
-    let pitch =
-        deviceBeta;
-
-    let roll =
-        deviceGamma;
-
-
-    // Convert to radians
-    pitch =
-        pitch * Math.PI / 180;
-
-    roll =
-        roll * Math.PI / 180;
-
-
-    /*
-       Apply pitch/roll compensation.
-
-       The exact response depends on the phone's physical
-       orientation, so keep this separate from the Apple
-       rotation itself.
-    */
-
-    container.object3D.rotation.x =
-        -pitch;
-
-    container.object3D.rotation.z =
-        -roll;
-
-}
-
-
-// ======================================================
-// START EVERYTHING
-// ======================================================
+// =====================================================
+// START
+// =====================================================
 
 scene.addEventListener(
+
     "loaded",
+
     function() {
 
+
         setupMotion();
+
 
         const canvas =
             scene.canvas;
 
 
+        // Touch
+
         canvas.addEventListener(
+
             "touchstart",
+
             touchStart,
+
             { passive: false }
+
         );
 
+
         canvas.addEventListener(
+
             "touchmove",
+
             touchMove,
+
             { passive: false }
+
         );
 
+
         canvas.addEventListener(
+
             "touchend",
+
             touchEnd,
+
             { passive: false }
+
         );
 
 
+        // Mouse
+
         canvas.addEventListener(
+
             "mousedown",
+
             mouseDown
+
         );
 
+
         canvas.addEventListener(
+
             "mousemove",
+
             mouseMove
+
         );
 
+
         canvas.addEventListener(
+
             "mouseup",
+
             mouseUp
+
         );
+
 
         canvas.addEventListener(
+
             "mouseleave",
+
             mouseUp
+
         );
 
 
-        // Continuously update upright orientation
+        // Continuous gravity correction
 
         function animate() {
 
-            updateUprightOrientation();
+
+            updateUpright();
+
 
             requestAnimationFrame(
                 animate
@@ -621,9 +978,11 @@ scene.addEventListener(
 
         }
 
+
         animate();
 
     }
+
 );
 
 </script>
