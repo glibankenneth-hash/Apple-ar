@@ -75,16 +75,32 @@ canvas {
         mindar-image-target="targetIndex: 0"
     >
 
-        <a-entity id="appleContainer">
+        <!--
+            IMPORTANT HIERARCHY
 
-            <a-gltf-model
-                id="apple"
-                src="#appleModel"
-                position="0 0 0"
-                rotation="0 0 0"
-                scale="1 1 1"
-            >
-            </a-gltf-model>
+            MindAR target
+                ↓
+            appleOrientation
+                ↓
+            appleRotation
+                ↓
+            apple
+        -->
+
+        <a-entity id="appleOrientation">
+
+            <a-entity id="appleRotation">
+
+                <a-gltf-model
+                    id="apple"
+                    src="#appleModel"
+                    position="0 0 0"
+                    rotation="0 0 0"
+                    scale="1 1 1"
+                >
+                </a-gltf-model>
+
+            </a-entity>
 
         </a-entity>
 
@@ -103,8 +119,14 @@ document.addEventListener("DOMContentLoaded", function () {
     const target =
         document.querySelector("#imageTarget");
 
-    const appleContainer =
-        document.querySelector("#appleContainer");
+    const appleOrientation =
+        document.querySelector("#appleOrientation");
+
+    const appleRotation =
+        document.querySelector("#appleRotation");
+
+    const apple =
+        document.querySelector("#apple");
 
     const THREE =
         AFRAME.THREE;
@@ -120,6 +142,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
     let modeConfirmFrames = 0;
 
+
+    /*
+        When the target is lying flat on the floor,
+        rotate the ORIENTATION container.
+
+        User rotation is kept completely separate.
+    */
 
     const FLOOR_CORRECTION =
         new THREE.Quaternion().setFromEuler(
@@ -226,73 +255,60 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
     /* =========================================================
+       FLOOR / VERTICAL ORIENTATION
+       ========================================================= */
+
+    function applyTargetOrientation() {
+
+        if (
+            currentMode === "floor"
+        ) {
+
+            appleOrientation.object3D.quaternion.copy(
+                FLOOR_CORRECTION
+            );
+
+        }
+        else {
+
+            appleOrientation.object3D.quaternion.identity();
+
+        }
+    }
+
+
+    /* =========================================================
        USER ROTATION
        =========================================================
 
        IMPORTANT:
 
-       We do NOT use a trackball here.
+       User rotation is completely independent from
+       MindAR target orientation.
 
-       The Apple is rotated directly according to the
-       direction the finger moves on the screen.
+       We directly modify the rotation container.
 
-       RIGHT  = positive Y rotation
-       LEFT   = negative Y rotation
-
-       UP     = negative X rotation
-       DOWN   = positive X rotation
-
-       This is intentionally camera/screen-style manipulation.
+       This avoids quaternion premultiplication and avoids
+       mixing the floor correction with touch rotation.
        ========================================================= */
 
 
-    const userQuaternion =
-        new THREE.Quaternion();
+    let rotationX = 0;
 
-
-    const rotationX =
-        new THREE.Quaternion();
-
-
-    const rotationY =
-        new THREE.Quaternion();
-
-
-    const AXIS_X =
-        new THREE.Vector3(
-            1,
-            0,
-            0
-        );
-
-
-    const AXIS_Y =
-        new THREE.Vector3(
-            0,
-            1,
-            0
-        );
+    let rotationY = 0;
 
 
     /*
-       Rotation sensitivity.
+        Rotation sensitivity.
 
-       Change ONLY these if you want the rotation
-       faster or slower.
+        Increase for faster rotation.
+        Decrease for slower rotation.
     */
 
-    const ROTATION_SPEED =
-        0.010;
+    const ROTATION_SPEED = 0.010;
 
 
-    function rotateApple(
-        deltaX,
-        deltaY
-    ) {
-
-        /*
-        Ignore microscopic movement.
-        */
+    function rotateApple(deltaX, deltaY) {
 
         if (
             Math.abs(deltaX) < 0.001 &&
@@ -302,106 +318,92 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
 
-        /* -----------------------------------------------------
-           HORIZONTAL
+        /*
+        ---------------------------------------------------------
+        HORIZONTAL
 
-           Finger RIGHT:
-               deltaX > 0
+        Finger RIGHT:
+            deltaX > 0
 
-           Apple RIGHT:
-               positive Y rotation
+        Apple RIGHT:
+            rotationY increases
 
-           Finger LEFT:
-               deltaX < 0
+        Finger LEFT:
+            deltaX < 0
 
-           Apple LEFT:
-               negative Y rotation
-           ----------------------------------------------------- */
+        Apple LEFT:
+            rotationY decreases
+        ---------------------------------------------------------
+        */
 
-        const yaw =
+        rotationY +=
             deltaX * ROTATION_SPEED;
 
 
-        rotationY.setFromAxisAngle(
-            AXIS_Y,
-            yaw
-        );
+        /*
+        ---------------------------------------------------------
+        VERTICAL
 
+        Browser coordinates:
 
-        /* -----------------------------------------------------
-           VERTICAL
+            UP:
+                deltaY < 0
 
-           Browser screen coordinates:
+            DOWN:
+                deltaY > 0
 
-               UP   = negative deltaY
-               DOWN = positive deltaY
+        Therefore:
 
-           We therefore use deltaY directly with X rotation
-           so the Apple follows the finger direction.
-           ----------------------------------------------------- */
+            finger UP
+                → Apple UP
 
-        const pitch =
+            finger DOWN
+                → Apple DOWN
+        ---------------------------------------------------------
+        */
+
+        rotationX +=
             deltaY * ROTATION_SPEED;
 
 
-        rotationX.setFromAxisAngle(
-            AXIS_X,
-            pitch
-        );
-
-
         /*
-        Apply both rotations.
+        Prevent unlimited floating-point growth.
 
-        Horizontal and vertical movement are independent,
-        so diagonal movement produces combined 3D rotation.
+        This does NOT restrict the actual rotation.
+        It simply keeps the values manageable.
         */
 
-        userQuaternion.premultiply(
-            rotationY
-        );
+        if (rotationX > Math.PI * 2) {
+            rotationX -= Math.PI * 2;
+        }
 
+        if (rotationX < -Math.PI * 2) {
+            rotationX += Math.PI * 2;
+        }
 
-        userQuaternion.premultiply(
-            rotationX
-        );
+        if (rotationY > Math.PI * 2) {
+            rotationY -= Math.PI * 2;
+        }
 
-
-        userQuaternion.normalize();
-
-
-        applyAppleRotation();
-    }
-
-
-    /* =========================================================
-       APPLY FINAL ROTATION
-       ========================================================= */
-
-    function applyAppleRotation() {
-
-        const finalQuaternion =
-            userQuaternion.clone();
-
-
-        /*
-        Only the AR target orientation correction is applied
-        here.
-
-        User rotation is NEVER overwritten by MindAR.
-        */
-
-        if (currentMode === "floor") {
-
-            finalQuaternion.multiply(
-                FLOOR_CORRECTION
-            );
+        if (rotationY < -Math.PI * 2) {
+            rotationY += Math.PI * 2;
         }
 
 
-        appleContainer.object3D.quaternion.copy(
-            finalQuaternion
-        );
+        applyUserRotation();
+    }
+
+
+    function applyUserRotation() {
+
+        appleRotation.object3D.rotation.x =
+            rotationX;
+
+        appleRotation.object3D.rotation.y =
+            rotationY;
+
+        appleRotation.object3D.rotation.z =
+            0;
     }
 
 
@@ -499,10 +501,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
             pinchStartScale =
-                appleContainer
-                    .object3D
-                    .scale
-                    .x;
+                apple.object3D.scale.x;
 
 
             return;
@@ -530,7 +529,7 @@ document.addEventListener("DOMContentLoaded", function () {
             );
 
 
-        appleContainer.object3D.scale.set(
+        apple.object3D.scale.set(
             scale,
             scale,
             scale
@@ -579,9 +578,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
             /*
             Two fingers = pinch.
-
-            Stop rotation so the second finger cannot
-            accidentally cause a rotation jump.
             */
 
             isRotating =
@@ -626,10 +622,6 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
 
-        /*
-        Update pointer coordinates.
-        */
-
         pointers.set(
             event.pointerId,
             {
@@ -640,7 +632,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
         /* -----------------------------------------------------
-           ONE FINGER
+           ONE FINGER = ROTATION
            ----------------------------------------------------- */
 
         if (
@@ -649,7 +641,6 @@ document.addEventListener("DOMContentLoaded", function () {
             rotationPointerId ===
             event.pointerId
         ) {
-
 
             const deltaX =
                 event.clientX -
@@ -660,13 +651,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 event.clientY -
                 previousY;
 
-
-            /*
-            THIS is the important part.
-
-            The exact physical direction of the finger
-            is passed directly into rotateApple().
-            */
 
             rotateApple(
                 deltaX,
@@ -684,10 +668,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
         /* -----------------------------------------------------
-           TWO FINGERS
+           TWO FINGERS = PINCH
            ----------------------------------------------------- */
 
-        else if (pointers.size === 2) {
+        else if (
+            pointers.size === 2
+        ) {
 
             isRotating =
                 false;
@@ -860,14 +846,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
             updateTargetMode();
 
+            applyTargetOrientation();
 
-            /*
-            Reapply the user's existing rotation.
-
-            We NEVER reset userQuaternion here.
-            */
-
-            applyAppleRotation();
         }
 
 
@@ -889,6 +869,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
         }
     );
+
+
+    /*
+        Start with identity user rotation.
+    */
+
+    applyUserRotation();
 
 
     requestAnimationFrame(
