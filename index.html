@@ -1,135 +1,133 @@
-```html
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+updateDebug: function (time) {
+          if (!DEBUG || time - this.lastDebugUpdate < 180) return;
+          this.lastDebugUpdate = time;
+          const output = document.getElementById('debug');
+          if (!output) return;
+          output.hidden = false;
+          output.textContent =
+            'target: ' + (this.tracking ? 'found' : 'lost') + '\n' +
+            'orientation sensor: ' + (this.sensorReady ? 'ready' : 'waiting') + '\n' +
+            'screen angle: ' + THREE.MathUtils.radToDeg(this.getScreenOrientationRadians()).toFixed(0) + '\n' +
+            'apple scale: ' + this.userScale.toFixed(2) + '\n' +
+            'apple local quaternion: ' + [
+              this.el.object3D.quaternion.x.toFixed(3),
+              this.el.object3D.quaternion.y.toFixed(3),
+              this.el.object3D.quaternion.z.toFixed(3),
+              this.el.object3D.quaternion.w.toFixed(3)
+            ].join(', ');
+        },
 
-    <title>Apple AR</title>
-
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-
-    <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            touch-action: none;
+        remove: function () {
+          window.removeEventListener('deviceorientation', this.onDeviceOrientation, true);
+          window.removeEventListener('orientationchange', this.onScreenOrientationChange, true);
+          if (window.screen && window.screen.orientation) {
+            window.screen.orientation.removeEventListener('change', this.onScreenOrientationChange, true);
+          }
+          this.targetEl.removeEventListener('targetFound', this.onTargetFound);
+          this.targetEl.removeEventListener('targetLost', this.onTargetLost);
+          this.el.sceneEl.removeEventListener('renderstart', this.onRenderStart);
+          if (!this.canvas) return;
+          this.canvas.removeEventListener('pointerdown', this.onPointerDown);
+          this.canvas.removeEventListener('pointermove', this.onPointerMove);
+          this.canvas.removeEventListener('pointerup', this.onPointerEnd);
+          this.canvas.removeEventListener('pointercancel', this.onPointerEnd);
         }
-    </style>
+      });
+
+      function getAppleController() {
+        const apple = document.getElementById('apple');
+        return apple && apple.components && apple.components['world-upright-apple'];
+      }
+
+      function waitForAppleController() {
+        return new Promise((resolve) => {
+          let attempts = 0;
+          const findController = () => {
+            const controller = getAppleController();
+            if (controller || attempts >= 100) {
+              resolve(controller);
+              return;
+            }
+            attempts += 1;
+            window.setTimeout(findController, 20);
+          };
+          findController();
+        });
+      }
+
+      function setupPermissionUI() {
+        const overlay = document.getElementById('permission-overlay');
+        const button = document.getElementById('enable-world-up');
+        const status = document.getElementById('permission-status');
+        const debug = document.getElementById('debug');
+        if (DEBUG) debug.hidden = false;
+
+        const orientationSupported = typeof window.DeviceOrientationEvent !== 'undefined';
+        const gestureRequired = orientationSupported &&
+          typeof window.DeviceOrientationEvent.requestPermission === 'function';
+
+        // Android normally supplies deviceorientation without a prompt. Desktop
+        // deliberately falls back to normal target-relative orientation.
+        if (!gestureRequired) {
+          overlay.classList.add('hidden');
+          return;
+        }
+
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          const controller = await waitForAppleController();
+          const granted = controller && await controller.enableDeviceOrientation();
+          if (granted) {
+            overlay.classList.add('hidden');
+          } else {
+            status.textContent = 'World-up needs Motion & Orientation access. You can still scan the target, but it will use normal image-target orientation.';
+            button.disabled = false;
+          }
+        });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupPermissionUI, { once: true });
+      } else {
+        setupPermissionUI();
+      }
+    })();
+  </script>
 </head>
 
 <body>
+  <div id="permission-overlay" class="permission-overlay">
+    <div class="permission-card">
+      <p id="permission-status">Enable Motion &amp; Orientation so the Apple can stay upright when the target is on the floor.</p>
+      <button id="enable-world-up" type="button">Enable world-up</button>
+    </div>
+  </div>
+  <pre id="debug" hidden></pre>
 
-<a-scene
+  <a-scene
     mindar-image="imageTargetSrc: ./targets.mind; autoStart: true;"
     color-space="sRGB"
-    renderer="colorManagement: true"
+    renderer="colorManagement: true; physicallyCorrectLights: true"
     vr-mode-ui="enabled: false"
-    device-orientation-permission-ui="enabled: false"
-    embedded>
+    device-orientation-permission-ui="enabled: false">
 
     <a-assets>
-        <a-asset-item
-            id="appleModel"
-            src="./Apple.glb">
-        </a-asset-item>
+      <a-asset-item id="appleModel" src="./Apple.glb"></a-asset-item>
     </a-assets>
 
-    <a-camera
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+    <!-- MindAR exclusively controls this entity's pose. -->
+    <a-entity id="apple-target" mindar-image-target="targetIndex: 0">
+      <!-- The model's local +Y is treated as its authored up axis. -->
+      <a-gltf-model
+        id="apple"
+        src="#appleModel"
         position="0 0 0"
-        look-controls="enabled: false">
-    </a-camera>
-
-    <!-- IMAGE TARGET -->
-    <a-entity mindar-image-target="targetIndex: 0">
-
-        <!-- Separate container for user rotation/scale -->
-        <a-entity id="appleContainer">
-
-            <a-gltf-model
-                id="apple"
-                src="#appleModel"
-                position="0 0 0"
-                rotation="0 0 0"
-                scale="1 1 1">
-            </a-gltf-model>
-
-        </a-entity>
-
+        scale="1 1 1"
+        world-upright-apple>
+      </a-gltf-model>
     </a-entity>
-
-</a-scene>
-
-
-<script>
-
-const appleContainer = document.querySelector("#appleContainer");
-
-let rotating = false;
-
-let lastX = 0;
-let rotationY = 0;
-
-let initialPinchDistance = null;
-let initialScale = 1;
-
-const MIN_SCALE = 0.3;
-const MAX_SCALE = 3.0;
-
-
-// --------------------------------------------------
-// MOUSE ROTATION
-// --------------------------------------------------
-
-document.addEventListener("mousedown", function(event) {
-
-    rotating = true;
-    lastX = event.clientX;
-
-});
-
-document.addEventListener("mousemove", function(event) {
-
-    if (!rotating) return;
-
-    const deltaX = event.clientX - lastX;
-
-    rotationY += deltaX * 0.5;
-
-    appleContainer.object3D.rotation.y =
-        THREE.MathUtils.degToRad(rotationY);
-
-    lastX = event.clientX;
-
-});
-
-document.addEventListener("mouseup", function() {
-
-    rotating = false;
-
-});
-
-
-// --------------------------------------------------
-// TOUCH
-// --------------------------------------------------
-
-document.addEventListener("touchstart", function(event) {
-
-    // PINCH START
-    if (event.touches.length === 2) {
-
-        initialPinchDistance = getDistance(
-            event.touches[0],
-            event.touches[1]
-        );
-
-        initialScale = appleContainer.object3D.scale.x;
-
-        rotating = fals
-```
+  </a-scene>
+</body>
+</html>
