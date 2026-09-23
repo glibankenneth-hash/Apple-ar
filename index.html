@@ -12,7 +12,6 @@
 
   <title>AR Children's Book</title>
 
-  <!-- MindAR A-Frame setup: use ONLY these two scripts -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
@@ -27,18 +26,12 @@
       background: #000;
     }
 
-    /*
-      MindAR's actual camera video is placed behind the transparent AR canvas.
-      This fixes devices where MindAR tracks the image but renders a black canvas.
-    */
     #mindar-camera-feed {
       position: fixed !important;
       inset: 0 !important;
       display: block !important;
       width: 100vw !important;
       height: 100vh !important;
-      min-width: 100vw !important;
-      min-height: 100vh !important;
       object-fit: cover !important;
       object-position: center !important;
       z-index: 0 !important;
@@ -117,9 +110,7 @@
       <a-asset-item id="ballModel" src="./Ball.glb"></a-asset-item>
     </a-assets>
 
-    <a-entity
-      light="type: ambient; intensity: 1.2"
-    ></a-entity>
+    <a-entity light="type: ambient; intensity: 1.2"></a-entity>
 
     <a-entity
       light="type: directional; intensity: 1.5"
@@ -131,7 +122,7 @@
       look-controls="enabled: false"
     ></a-camera>
 
-    <!-- Apple target: first image in targets.mind -->
+    <!-- Apple target: targetIndex 0 -->
     <a-entity
       id="appleTarget"
       mindar-image-target="targetIndex: 0"
@@ -150,7 +141,7 @@
       </a-entity>
     </a-entity>
 
-    <!-- Ball target: second image in targets.mind -->
+    <!-- Ball target: targetIndex 1 -->
     <a-entity
       id="ballTarget"
       mindar-image-target="targetIndex: 1"
@@ -193,6 +184,13 @@
 
       let activeTarget = null;
       let videoPlaced = false;
+      let ballIsBouncing = false;
+      let ballReturnTimer = null;
+
+      const ballMaterialStates = new Map();
+      const tapStarts = new Map();
+      const tapRaycaster = new THREE.Raycaster();
+      const tapPointer = new THREE.Vector2();
 
       function showStatus(message) {
         status.textContent = message;
@@ -203,11 +201,6 @@
         status.classList.add("hidden");
       }
 
-      /*
-        MindAR already has permission to use this video.
-        We only make that same video visible behind the transparent 3D canvas.
-        No second camera request is made.
-      */
       function placeMindARCameraVideo() {
         if (videoPlaced) return true;
 
@@ -225,18 +218,10 @@
         cameraVideo.muted = true;
         cameraVideo.autoplay = true;
 
-        /*
-          Place the camera feed immediately before the AR scene.
-          The scene canvas is transparent and stays above it.
-        */
-        if (cameraVideo.parentElement !== document.body) {
-          document.body.insertBefore(cameraVideo, scene);
-        } else {
-          document.body.insertBefore(cameraVideo, scene);
-        }
+        document.body.insertBefore(cameraVideo, scene);
 
         cameraVideo.play().catch(() => {
-          /* Camera permission already controls playback on mobile. */
+          /* Camera permission controls playback on mobile. */
         });
 
         videoPlaced = true;
@@ -251,23 +236,14 @@
       });
 
       scene.addEventListener("arError", () => {
-        showStatus("Camera could not start. Open this page in Chrome or Safari and allow camera access.");
+        showStatus("Camera could not start. Open this page in Chrome or Safari.");
       });
 
-      /*
-        Some phones create the MindAR video element slightly after arReady.
-      */
       const cameraCheck = setInterval(() => {
         if (placeMindARCameraVideo()) {
           clearInterval(cameraCheck);
         }
       }, 250);
-
-      setTimeout(() => {
-        if (!videoPlaced) {
-          showStatus("Waiting for camera permission…");
-        }
-      }, 5000);
 
       const floorCorrection = new THREE.Quaternion();
 
@@ -291,6 +267,142 @@
         }
       }
 
+      function rememberBallMaterials() {
+        ball.object3D.traverse((object) => {
+          if (!object.isMesh) return;
+
+          const materials = Array.isArray(object.material)
+            ? object.material
+            : [object.material];
+
+          materials.forEach((material) => {
+            if (!material || ballMaterialStates.has(material)) return;
+
+            ballMaterialStates.set(material, {
+              opacity: material.opacity,
+              transparent: material.transparent
+            });
+          });
+        });
+      }
+
+      function setBallOpacity(opacity) {
+        ball.object3D.traverse((object) => {
+          if (!object.isMesh) return;
+
+          const materials = Array.isArray(object.material)
+            ? object.material
+            : [object.material];
+
+          materials.forEach((material) => {
+            if (!material) return;
+
+            material.transparent = true;
+            material.opacity = opacity;
+            material.needsUpdate = true;
+          });
+        });
+      }
+
+      function restoreBallMaterials() {
+        ballMaterialStates.forEach((state, material) => {
+          material.opacity = state.opacity;
+          material.transparent = state.transparent;
+          material.needsUpdate = true;
+        });
+      }
+
+      function resetBall() {
+        ball.object3D.position.set(0, 0, 0);
+
+        restoreBallMaterials();
+
+        ballIsBouncing = false;
+
+        if (activeTarget === 1) {
+          ball.setAttribute("visible", "true");
+        }
+      }
+
+      function bounceBall() {
+        if (activeTarget !== 1 || ballIsBouncing) return;
+
+        ballIsBouncing = true;
+
+        if (ballReturnTimer) {
+          clearTimeout(ballReturnTimer);
+        }
+
+        const startTime = performance.now();
+        const duration = 420;
+
+        function animateBounce(currentTime) {
+          const progress = Math.min(
+            (currentTime - startTime) / duration,
+            1
+          );
+
+          const upwardArc = Math.sin(progress * Math.PI) * 0.75;
+
+          ball.object3D.position.set(
+            progress * 0.7,
+            upwardArc,
+            progress * 0.45
+          );
+
+          setBallOpacity(1 - progress);
+
+          if (progress < 1) {
+            requestAnimationFrame(animateBounce);
+            return;
+          }
+
+          ball.setAttribute("visible", "false");
+
+          ballReturnTimer = setTimeout(() => {
+            resetBall();
+          }, 500);
+        }
+
+        requestAnimationFrame(animateBounce);
+      }
+
+      /*
+        This checks whether the user's tap actually touched the Ball.glb model.
+        It does not rely on the unreliable mobile A-Frame click event.
+      */
+      function didTapBall(event) {
+        if (
+          !scene.canvas ||
+          !scene.camera ||
+          !ball.object3D ||
+          !ball.object3D.visible
+        ) {
+          return false;
+        }
+
+        const bounds = scene.canvas.getBoundingClientRect();
+
+        tapPointer.x =
+          ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+
+        tapPointer.y =
+          -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+
+        tapRaycaster.setFromCamera(tapPointer, scene.camera);
+
+        const intersections = tapRaycaster.intersectObject(
+          ball.object3D,
+          true
+        );
+
+        return intersections.length > 0;
+      }
+
+      ball.addEventListener("model-loaded", () => {
+        rememberBallMaterials();
+      });
+
       function showApple() {
         activeTarget = 0;
 
@@ -304,6 +416,11 @@
         activeTarget = 1;
 
         apple.setAttribute("visible", "false");
+
+        if (!ballIsBouncing) {
+          resetBall();
+        }
+
         ball.setAttribute("visible", "true");
 
         applyOrientation(ballTarget, ballOrientation);
@@ -375,9 +492,14 @@
       }
 
       scene.addEventListener("pointerdown", (event) => {
-        if (activeTarget === null) return;
+        if (activeTarget === null || ballIsBouncing) return;
 
         pointers.set(event.pointerId, {
+          x: event.clientX,
+          y: event.clientY
+        });
+
+        tapStarts.set(event.pointerId, {
           x: event.clientX,
           y: event.clientY
         });
@@ -405,7 +527,7 @@
       });
 
       scene.addEventListener("pointermove", (event) => {
-        if (!pointers.has(event.pointerId)) return;
+        if (!pointers.has(event.pointerId) || ballIsBouncing) return;
 
         pointers.set(event.pointerId, {
           x: event.clientX,
@@ -442,8 +564,34 @@
         }
       });
 
-      function pointerEnd(event) {
+      function finishPointer(event) {
+        const tapStart = tapStarts.get(event.pointerId);
+
+        /*
+          A tap is a touch that moved less than 12 pixels.
+          If that tap hits Ball.glb, start the bounce animation.
+        */
+        if (
+          event.type === "pointerup" &&
+          tapStart &&
+          pointers.size === 1 &&
+          activeTarget === 1 &&
+          !ballIsBouncing
+        ) {
+          const movedX = event.clientX - tapStart.x;
+          const movedY = event.clientY - tapStart.y;
+
+          const tapDistance = Math.sqrt(
+            movedX * movedX + movedY * movedY
+          );
+
+          if (tapDistance < 12 && didTapBall(event)) {
+            bounceBall();
+          }
+        }
+
         pointers.delete(event.pointerId);
+        tapStarts.delete(event.pointerId);
 
         if (pointers.size === 0) {
           rotating = false;
@@ -461,9 +609,9 @@
         }
       }
 
-      scene.addEventListener("pointerup", pointerEnd);
-      scene.addEventListener("pointercancel", pointerEnd);
-      scene.addEventListener("pointerleave", pointerEnd);
+      scene.addEventListener("pointerup", finishPointer);
+      scene.addEventListener("pointercancel", finishPointer);
+      scene.addEventListener("pointerleave", finishPointer);
 
       scene.addEventListener(
         "touchstart",
