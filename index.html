@@ -12,10 +12,9 @@
 
   <title>AR Children's Book</title>
 
-  <!-- Load these in this order -->
-  <script src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/dist/mindar-image.prod.js"></script>
+  <!-- MindAR A-Frame setup: use ONLY these two scripts -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
   <style>
     html,
@@ -25,17 +24,59 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
+      background: #000;
+    }
+
+    /*
+      MindAR's actual camera video is placed behind the transparent AR canvas.
+      This fixes devices where MindAR tracks the image but renders a black canvas.
+    */
+    #mindar-camera-feed {
+      position: fixed !important;
+      inset: 0 !important;
+      display: block !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      min-width: 100vw !important;
+      min-height: 100vh !important;
+      object-fit: cover !important;
+      object-position: center !important;
+      z-index: 0 !important;
+      background: #000 !important;
     }
 
     a-scene {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 1 !important;
+      background: transparent !important;
     }
 
-    canvas {
+    a-scene canvas {
+      background: transparent !important;
       touch-action: none !important;
+    }
+
+    #ar-status {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      z-index: 10;
+      transform: translateX(-50%);
+      padding: 10px 15px;
+      border-radius: 8px;
+      color: white;
+      background: rgba(0, 0, 0, 0.65);
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    #ar-status.hidden {
+      display: none;
     }
 
     .mindar-ui-loading,
@@ -47,6 +88,8 @@
 </head>
 
 <body>
+  <div id="ar-status">Starting camera…</div>
+
   <a-scene
     mindar-image="
       imageTargetSrc: ./targets.mind;
@@ -60,22 +103,35 @@
       maxTrack: 1;
     "
     color-space="sRGB"
-    renderer="colorManagement: true; antialias: true"
+    renderer="
+      alpha: true;
+      colorManagement: true;
+      physicallyCorrectLights: true;
+      antialias: true;
+    "
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false"
-    embedded
   >
     <a-assets>
       <a-asset-item id="appleModel" src="./Apple.glb"></a-asset-item>
       <a-asset-item id="ballModel" src="./Ball.glb"></a-asset-item>
     </a-assets>
 
+    <a-entity
+      light="type: ambient; intensity: 1.2"
+    ></a-entity>
+
+    <a-entity
+      light="type: directional; intensity: 1.5"
+      position="1 2 1"
+    ></a-entity>
+
     <a-camera
       position="0 0 0"
       look-controls="enabled: false"
     ></a-camera>
 
-    <!-- Apple target: targetIndex 0 -->
+    <!-- Apple target: first image in targets.mind -->
     <a-entity
       id="appleTarget"
       mindar-image-target="targetIndex: 0"
@@ -94,7 +150,7 @@
       </a-entity>
     </a-entity>
 
-    <!-- Ball target: targetIndex 1 -->
+    <!-- Ball target: second image in targets.mind -->
     <a-entity
       id="ballTarget"
       mindar-image-target="targetIndex: 1"
@@ -119,6 +175,7 @@
       const THREE = AFRAME.THREE;
 
       const scene = document.querySelector("a-scene");
+      const status = document.querySelector("#ar-status");
 
       const appleTarget = document.querySelector("#appleTarget");
       const ballTarget = document.querySelector("#ballTarget");
@@ -132,10 +189,88 @@
       const appleRotation = document.querySelector("#appleRotation");
       const ballRotation = document.querySelector("#ballRotation");
 
-      let activeTarget = null;
       const BASE_SCALE = 4.54545;
 
+      let activeTarget = null;
+      let videoPlaced = false;
+
+      function showStatus(message) {
+        status.textContent = message;
+        status.classList.remove("hidden");
+      }
+
+      function hideStatus() {
+        status.classList.add("hidden");
+      }
+
+      /*
+        MindAR already has permission to use this video.
+        We only make that same video visible behind the transparent 3D canvas.
+        No second camera request is made.
+      */
+      function placeMindARCameraVideo() {
+        if (videoPlaced) return true;
+
+        const videos = Array.from(document.querySelectorAll("video"));
+
+        const cameraVideo = videos.find((video) => {
+          return video.srcObject !== null;
+        });
+
+        if (!cameraVideo) return false;
+
+        cameraVideo.id = "mindar-camera-feed";
+        cameraVideo.setAttribute("playsinline", "");
+        cameraVideo.setAttribute("webkit-playsinline", "");
+        cameraVideo.muted = true;
+        cameraVideo.autoplay = true;
+
+        /*
+          Place the camera feed immediately before the AR scene.
+          The scene canvas is transparent and stays above it.
+        */
+        if (cameraVideo.parentElement !== document.body) {
+          document.body.insertBefore(cameraVideo, scene);
+        } else {
+          document.body.insertBefore(cameraVideo, scene);
+        }
+
+        cameraVideo.play().catch(() => {
+          /* Camera permission already controls playback on mobile. */
+        });
+
+        videoPlaced = true;
+        hideStatus();
+
+        return true;
+      }
+
+      scene.addEventListener("arReady", () => {
+        showStatus("Point your camera at a book page…");
+        placeMindARCameraVideo();
+      });
+
+      scene.addEventListener("arError", () => {
+        showStatus("Camera could not start. Open this page in Chrome or Safari and allow camera access.");
+      });
+
+      /*
+        Some phones create the MindAR video element slightly after arReady.
+      */
+      const cameraCheck = setInterval(() => {
+        if (placeMindARCameraVideo()) {
+          clearInterval(cameraCheck);
+        }
+      }, 250);
+
+      setTimeout(() => {
+        if (!videoPlaced) {
+          showStatus("Waiting for camera permission…");
+        }
+      }, 5000);
+
       const floorCorrection = new THREE.Quaternion();
+
       floorCorrection.setFromEuler(
         new THREE.Euler(-Math.PI / 2, 0, 0, "XYZ")
       );
@@ -144,6 +279,7 @@
         if (!target.object3D || !orientation.object3D) return;
 
         const normal = new THREE.Vector3(0, 0, 1);
+
         normal.applyQuaternion(target.object3D.quaternion);
 
         const isVertical = Math.abs(normal.y) < 0.5;
@@ -157,15 +293,19 @@
 
       function showApple() {
         activeTarget = 0;
+
         ball.setAttribute("visible", "false");
         apple.setAttribute("visible", "true");
+
         applyOrientation(appleTarget, appleOrientation);
       }
 
       function showBall() {
         activeTarget = 1;
+
         apple.setAttribute("visible", "false");
         ball.setAttribute("visible", "true");
+
         applyOrientation(ballTarget, ballOrientation);
       }
 
@@ -225,7 +365,7 @@
         return null;
       }
 
-      function distanceBetweenPointers() {
+      function currentPointerDistance() {
         const values = Array.from(pointers.values());
 
         const dx = values[0].x - values[1].x;
@@ -245,6 +385,7 @@
         if (pointers.size === 1) {
           rotating = true;
           pinching = false;
+
           lastX = event.clientX;
           lastY = event.clientY;
         }
@@ -252,7 +393,8 @@
         if (pointers.size === 2) {
           rotating = false;
           pinching = true;
-          pinchStartDistance = distanceBetweenPointers();
+
+          pinchStartDistance = currentPointerDistance();
 
           const model = getActiveModel();
 
@@ -286,10 +428,10 @@
         }
 
         if (pointers.size === 2 && pinching && pinchStartDistance > 0) {
-          const currentDistance = distanceBetweenPointers();
-          const factor = currentDistance / pinchStartDistance;
+          const factor = currentPointerDistance() / pinchStartDistance;
 
           let newScale = pinchStartScale * factor;
+
           newScale = Math.max(0.3, Math.min(15, newScale));
 
           const model = getActiveModel();
