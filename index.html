@@ -46,8 +46,6 @@ canvas {
     touch-action: none !important;
 }
 
-/* Hide MindAR UI */
-
 .mindar-ui-loading,
 .mindar-ui-scanning,
 .mindar-ui-error {
@@ -73,10 +71,13 @@ canvas {
         uiScanning: no;
         uiLoading: no;
         uiError: no;
-        warmupTolerance: 3;
-        missTolerance: 2;
-        filterMinCF: 0.0005;
-        filterBeta: 0.001;
+
+        warmupTolerance: 1;
+        missTolerance: 1;
+
+        filterMinCF: 0.001;
+        filterBeta: 0.01;
+
         maxTrack: 1;
     "
 
@@ -245,14 +246,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // ========================================================
     // BASE SCALE
-    //
-    // Target physical width = 22 cm
-    //
-    // Apple = approximately 7.6 cm
-    // Ball  = approximately 24.15 cm
-    //
-    // Both GLBs were modeled at their correct dimensions,
-    // therefore the same AR conversion factor is used.
     // ========================================================
 
     const BASE_SCALE = 4.54545;
@@ -272,12 +265,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     // ========================================================
-    // FLOOR ORIENTATION
-    //
-    // MindAR target normally lies in the XY plane.
-    //
-    // This correction allows the tracked object to stand
-    // correctly when the target image is lying flat on a floor.
+    // FLOOR CORRECTION
     // ========================================================
 
     const FLOOR_CORRECTION =
@@ -294,24 +282,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     // ========================================================
-    // TRACKING STABILITY
+    // ORIENTATION
     // ========================================================
 
-    let trackingFrames = 0;
+    function applyOrientation(
+        target,
+        orientation
+    ) {
 
-    const REQUIRED_FRAMES = 4;
+        if (!target.object3D) {
+            return;
+        }
 
-
-    // ========================================================
-    // APPLY ORIENTATION
-    // ========================================================
-
-    function applyAppleOrientation() {
-
-        if (!appleTarget.object3D) return;
-
-        const targetObject =
-            appleTarget.object3D;
 
         const normal =
             new THREE.Vector3(
@@ -320,9 +302,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 1
             );
 
+
         normal.applyQuaternion(
-            targetObject.quaternion
+            target.object3D.quaternion
         );
+
 
         const vertical =
             Math.abs(normal.y) < 0.5;
@@ -330,54 +314,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (vertical) {
 
-            appleOrientation.object3D
+            orientation.object3D
                 .quaternion
                 .identity();
 
         } else {
 
-            appleOrientation.object3D
+            orientation.object3D
                 .quaternion
-                .copy(FLOOR_CORRECTION);
-
-        }
-
-    }
-
-
-    function applyBallOrientation() {
-
-        if (!ballTarget.object3D) return;
-
-        const targetObject =
-            ballTarget.object3D;
-
-        const normal =
-            new THREE.Vector3(
-                0,
-                0,
-                1
-            );
-
-        normal.applyQuaternion(
-            targetObject.quaternion
-        );
-
-        const vertical =
-            Math.abs(normal.y) < 0.5;
-
-
-        if (vertical) {
-
-            ballOrientation.object3D
-                .quaternion
-                .identity();
-
-        } else {
-
-            ballOrientation.object3D
-                .quaternion
-                .copy(FLOOR_CORRECTION);
+                .copy(
+                    FLOOR_CORRECTION
+                );
 
         }
 
@@ -385,48 +332,94 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     // ========================================================
-    // TARGET FOUND
+    // FAST TARGET SWITCH
+    // ========================================================
+
+    function activateApple() {
+
+        activeTarget = 0;
+
+
+        // Immediately hide the other object
+
+        ball.setAttribute(
+            "visible",
+            "false"
+        );
+
+
+        // Immediately show Apple
+
+        apple.setAttribute(
+            "visible",
+            "true"
+        );
+
+
+        // Apply orientation immediately
+
+        applyOrientation(
+            appleTarget,
+            appleOrientation
+        );
+
+    }
+
+
+    function activateBall() {
+
+        activeTarget = 1;
+
+
+        // Immediately hide the other object
+
+        apple.setAttribute(
+            "visible",
+            "false"
+        );
+
+
+        // Immediately show Ball
+
+        ball.setAttribute(
+            "visible",
+            "true"
+        );
+
+
+        // Apply orientation immediately
+
+        applyOrientation(
+            ballTarget,
+            ballOrientation
+        );
+
+    }
+
+
+    // ========================================================
+    // APPLE FOUND
     // ========================================================
 
     appleTarget.addEventListener(
         "targetFound",
         () => {
 
-            activeTarget = 0;
-
-            trackingFrames = 0;
-
-            apple.setAttribute(
-                "visible",
-                "true"
-            );
-
-            ball.setAttribute(
-                "visible",
-                "false"
-            );
+            activateApple();
 
         }
     );
 
 
+    // ========================================================
+    // BALL FOUND
+    // ========================================================
+
     ballTarget.addEventListener(
         "targetFound",
         () => {
 
-            activeTarget = 1;
-
-            trackingFrames = 0;
-
-            ball.setAttribute(
-                "visible",
-                "true"
-            );
-
-            apple.setAttribute(
-                "visible",
-                "false"
-            );
+            activateBall();
 
         }
     );
@@ -434,6 +427,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // ========================================================
     // TARGET LOST
+    //
+    // Only hide the object if it is still the active target.
+    // This prevents the old page from interfering with a new
+    // page during a fast switch.
     // ========================================================
 
     appleTarget.addEventListener(
@@ -475,61 +472,45 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     // ========================================================
-    // STABLE TRACKING LOOP
+    // CONTINUOUS ORIENTATION UPDATE
+    //
+    // No artificial 4-frame delay.
     // ========================================================
 
-    function trackingLoop() {
+    function orientationLoop() {
 
-        if (activeTarget !== null) {
+        if (activeTarget === 0) {
 
-            trackingFrames++;
+            applyOrientation(
+                appleTarget,
+                appleOrientation
+            );
 
-            if (
-                trackingFrames >=
-                REQUIRED_FRAMES
-            ) {
+        }
 
-                if (activeTarget === 0) {
+        else if (activeTarget === 1) {
 
-                    applyAppleOrientation();
-
-                }
-
-                if (activeTarget === 1) {
-
-                    applyBallOrientation();
-
-                }
-
-            }
-
-        } else {
-
-            trackingFrames = 0;
+            applyOrientation(
+                ballTarget,
+                ballOrientation
+            );
 
         }
 
 
         requestAnimationFrame(
-            trackingLoop
+            orientationLoop
         );
 
     }
 
-    trackingLoop();
+
+    orientationLoop();
 
 
     // ========================================================
-    // TOUCH / POINTER CONTROL
-    //
-    // ONE FINGER:
-    // Rotate object
-    //
-    // TWO FINGERS:
-    // Pinch to scale
+    // POINTER / TOUCH CONTROL
     // ========================================================
-
-    let pointerCount = 0;
 
     const pointers = new Map();
 
@@ -549,7 +530,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     // ========================================================
-    // GET ACTIVE ROTATION OBJECT
+    // ACTIVE ROTATION OBJECT
     // ========================================================
 
     function getActiveRotationObject() {
@@ -560,11 +541,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
         }
 
+
         if (activeTarget === 1) {
 
             return ballRotation.object3D;
 
         }
+
 
         return null;
 
@@ -572,7 +555,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     // ========================================================
-    // GET ACTIVE MODEL
+    // ACTIVE MODEL
     // ========================================================
 
     function getActiveModel() {
@@ -583,11 +566,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
         }
 
+
         if (activeTarget === 1) {
 
             return ball.object3D;
 
         }
+
 
         return null;
 
@@ -616,24 +601,22 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-            pointerCount =
-                pointers.size;
-
-
-            if (pointerCount === 1) {
+            if (pointers.size === 1) {
 
                 rotating = true;
 
                 pinching = false;
 
-                lastX = event.clientX;
+                lastX =
+                    event.clientX;
 
-                lastY = event.clientY;
+                lastY =
+                    event.clientY;
 
             }
 
 
-            if (pointerCount === 2) {
+            if (pointers.size === 2) {
 
                 rotating = false;
 
@@ -735,6 +718,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 rotationObject.rotation.y
                     += dx * 0.01;
 
+
                 rotationObject.rotation.x
                     += dy * 0.01;
 
@@ -798,10 +782,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     factor;
 
 
-                // Allow shrinking and enlarging
-                // while keeping the initial
-                // 4.54545 scale intact.
-
                 newScale =
                     Math.max(
                         0.3,
@@ -833,7 +813,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     // ========================================================
-    // POINTER UP
+    // POINTER END
     // ========================================================
 
     function pointerEnd(event) {
@@ -843,11 +823,7 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
 
-        pointerCount =
-            pointers.size;
-
-
-        if (pointerCount === 0) {
+        if (pointers.size === 0) {
 
             rotating = false;
 
@@ -856,7 +832,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
 
-        if (pointerCount === 1) {
+        if (pointers.size === 1) {
 
             rotating = true;
 
@@ -889,10 +865,12 @@ document.addEventListener("DOMContentLoaded", () => {
         pointerEnd
     );
 
+
     scene.addEventListener(
         "pointercancel",
         pointerEnd
     );
+
 
     scene.addEventListener(
         "pointerleave",
@@ -901,7 +879,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     // ========================================================
-    // PREVENT DEFAULT TOUCH BEHAVIOR
+    // PREVENT PAGE SCROLL / ZOOM
     // ========================================================
 
     scene.addEventListener(
@@ -941,7 +919,6 @@ document.addEventListener("DOMContentLoaded", () => {
             passive: false
         }
     );
-
 
 });
 
