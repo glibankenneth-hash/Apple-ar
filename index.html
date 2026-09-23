@@ -23,8 +23,7 @@ content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable
 
 <style>
 
-html,
-body {
+html, body {
 
     margin: 0;
     padding: 0;
@@ -70,7 +69,6 @@ canvas {
 ```
 mindar-image="
     imageTargetSrc: ./targets.mind;
-
     autoStart: true;
 
     uiScanning: no;
@@ -78,7 +76,6 @@ mindar-image="
     uiError: no;
 
     warmupTolerance: 3;
-
     missTolerance: 1;
 
     filterMinCF: 0.0005;
@@ -124,7 +121,7 @@ embedded
  look-controls="enabled: false"> </a-camera>
 
 <!-- =========================================================
-     APPLE
+     APPLE TARGET
      ========================================================= -->
 
 <a-entity
@@ -155,7 +152,7 @@ mindar-image-target="targetIndex: 0"
 </a-entity>
 
 <!-- =========================================================
-     BALL
+     BALL TARGET
      ========================================================= -->
 
 <a-entity
@@ -204,13 +201,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const ballTarget =
         document.querySelector("#ballTarget");
 
-
     const apple =
         document.querySelector("#apple");
 
     const ball =
         document.querySelector("#ball");
-
 
     const appleOrientation =
         document.querySelector("#appleOrientation");
@@ -218,13 +213,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const ballOrientation =
         document.querySelector("#ballOrientation");
 
-
     const appleRotation =
         document.querySelector("#appleRotation");
 
     const ballRotation =
         document.querySelector("#ballRotation");
-
 
     const scene =
         document.querySelector("a-scene");
@@ -250,7 +243,6 @@ document.addEventListener("DOMContentLoaded", () => {
         BASE_SCALE
     );
 
-
     ball.object3D.scale.set(
         BASE_SCALE,
         BASE_SCALE,
@@ -264,7 +256,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const FLOOR_CORRECTION =
         new THREE.Quaternion();
-
 
     FLOOR_CORRECTION.setFromEuler(
 
@@ -292,11 +283,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
         const normal =
-            new THREE.Vector3(
-                0,
-                0,
-                1
-            );
+            new THREE.Vector3(0, 0, 1);
 
 
         normal.applyQuaternion(
@@ -342,11 +329,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
         const normal =
-            new THREE.Vector3(
-                0,
-                0,
-                1
-            );
+            new THREE.Vector3(0, 0, 1);
 
 
         normal.applyQuaternion(
@@ -379,21 +362,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* =====================================================
-       TARGET FOUND
-       
-       IMPORTANT:
-       The new object is shown immediately.
-       The old object is hidden immediately.
+       APPLE FOUND
        ===================================================== */
 
     appleTarget.addEventListener(
         "targetFound",
         () => {
 
+            /*
+             * Switch immediately.
+             */
+
             activeTarget = 0;
 
 
-            /* Hide Ball immediately */
+            /*
+             * Hide Ball immediately.
+             */
 
             ball.setAttribute(
                 "visible",
@@ -401,7 +386,9 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-            /* Show Apple immediately */
+            /*
+             * Show Apple immediately.
+             */
 
             apple.setAttribute(
                 "visible",
@@ -409,7 +396,9 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-            /* Correct orientation immediately */
+            /*
+             * Apply orientation immediately.
+             */
 
             applyAppleOrientation();
 
@@ -417,14 +406,24 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
+    /* =====================================================
+       BALL FOUND
+       ===================================================== */
+
     ballTarget.addEventListener(
         "targetFound",
         () => {
 
+            /*
+             * Switch immediately.
+             */
+
             activeTarget = 1;
 
 
-            /* Hide Apple immediately */
+            /*
+             * Hide Apple immediately.
+             */
 
             apple.setAttribute(
                 "visible",
@@ -432,7 +431,9 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-            /* Show Ball immediately */
+            /*
+             * Show Ball immediately.
+             */
 
             ball.setAttribute(
                 "visible",
@@ -440,7 +441,9 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-            /* Correct orientation immediately */
+            /*
+             * Apply orientation immediately.
+             */
 
             applyBallOrientation();
 
@@ -449,7 +452,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* =====================================================
-       TARGET LOST
+       APPLE LOST
        ===================================================== */
 
     appleTarget.addEventListener(
@@ -457,9 +460,9 @@ document.addEventListener("DOMContentLoaded", () => {
         () => {
 
             /*
-               Ignore an old Apple lost event if we have
-               already switched to Ball.
-            */
+             * If we have already switched to Ball,
+             * ignore Apple's old lost event.
+             */
 
             if (activeTarget !== 0) return;
 
@@ -476,14 +479,18 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
+    /* =====================================================
+       BALL LOST
+       ===================================================== */
+
     ballTarget.addEventListener(
         "targetLost",
         () => {
 
             /*
-               Ignore an old Ball lost event if we have
-               already switched to Apple.
-            */
+             * If we have already switched to Apple,
+             * ignore Ball's old lost event.
+             */
 
             if (activeTarget !== 1) return;
 
@@ -503,7 +510,7 @@ document.addEventListener("DOMContentLoaded", () => {
     /* =====================================================
        CONTINUOUS ORIENTATION
        
-       No 4-frame artificial delay.
+       NO ARTIFICIAL FRAME DELAY.
        ===================================================== */
 
     function trackingLoop() {
@@ -514,7 +521,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         }
 
-        else if (activeTarget === 1) {
+
+        if (activeTarget === 1) {
 
             applyBallOrientation();
 
@@ -623,6 +631,8 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
+            /* ONE FINGER */
+
             if (pointers.size === 1) {
 
                 rotating = true;
@@ -638,6 +648,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
             }
 
+
+            /* TWO FINGERS */
 
             if (pointers.size === 2) {
 
@@ -884,12 +896,10 @@ document.addEventListener("DOMContentLoaded", () => {
         pointerEnd
     );
 
-
     scene.addEventListener(
         "pointercancel",
         pointerEnd
     );
-
 
     scene.addEventListener(
         "pointerleave",
@@ -898,7 +908,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* =====================================================
-       PREVENT BROWSER TOUCH GESTURES
+       PREVENT BROWSER GESTURES
        ===================================================== */
 
     scene.addEventListener(
