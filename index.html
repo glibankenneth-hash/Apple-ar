@@ -107,6 +107,7 @@
   >
     <a-assets>
       <a-asset-item id="appleModel" src="./Apple.glb"></a-asset-item>
+      <a-asset-item id="appleSliceModel" src="./AppleSlice.glb"></a-asset-item>
       <a-asset-item id="ballModel" src="./Ball.glb"></a-asset-item>
     </a-assets>
 
@@ -129,9 +130,20 @@
     >
       <a-entity id="appleOrientation">
         <a-entity id="appleRotation">
+          <!-- Whole Apple -->
           <a-gltf-model
             id="apple"
             src="#appleModel"
+            position="0 0 0"
+            rotation="0 0 0"
+            scale="4.54545 4.54545 4.54545"
+            visible="false"
+          ></a-gltf-model>
+
+          <!-- Sliced Apple with seeds -->
+          <a-gltf-model
+            id="appleSlice"
+            src="#appleSliceModel"
             position="0 0 0"
             rotation="0 0 0"
             scale="4.54545 4.54545 4.54545"
@@ -172,6 +184,7 @@
       const ballTarget = document.querySelector("#ballTarget");
 
       const apple = document.querySelector("#apple");
+      const appleSlice = document.querySelector("#appleSlice");
       const ball = document.querySelector("#ball");
 
       const appleOrientation = document.querySelector("#appleOrientation");
@@ -184,11 +197,16 @@
 
       let activeTarget = null;
       let videoPlaced = false;
+
+      let appleIsSliced = false;
+      let appleSliceAnimating = false;
+
       let ballIsBouncing = false;
       let ballReturnTimer = null;
 
       const ballMaterialStates = new Map();
       const tapStarts = new Map();
+
       const tapRaycaster = new THREE.Raycaster();
       const tapPointer = new THREE.Vector2();
 
@@ -265,6 +283,66 @@
         } else {
           orientation.object3D.quaternion.copy(floorCorrection);
         }
+      }
+
+      function showWholeApple() {
+        appleSlice.object3D.position.set(0, 0, 0);
+        appleSlice.object3D.rotation.set(0, 0, 0);
+
+        appleSlice.setAttribute("visible", "false");
+        apple.setAttribute("visible", "true");
+
+        appleIsSliced = false;
+        appleSliceAnimating = false;
+      }
+
+      function sliceApple() {
+        if (
+          activeTarget !== 0 ||
+          appleIsSliced ||
+          appleSliceAnimating
+        ) {
+          return;
+        }
+
+        appleSliceAnimating = true;
+
+        apple.setAttribute("visible", "false");
+
+        appleSlice.object3D.position.set(0, 0, 0);
+        appleSlice.object3D.rotation.set(0, 0, 0);
+
+        appleSlice.setAttribute("visible", "true");
+
+        const startTime = performance.now();
+        const duration = 350;
+
+        function animateSlice(currentTime) {
+          const progress = Math.min(
+            (currentTime - startTime) / duration,
+            1
+          );
+
+          const easeOut = 1 - Math.pow(1 - progress, 3);
+
+          appleSlice.object3D.position.set(
+            0,
+            easeOut * 0.08,
+            easeOut * 0.08
+          );
+
+          appleSlice.object3D.rotation.y = easeOut * 0.18;
+
+          if (progress < 1) {
+            requestAnimationFrame(animateSlice);
+            return;
+          }
+
+          appleIsSliced = true;
+          appleSliceAnimating = false;
+        }
+
+        requestAnimationFrame(animateSlice);
       }
 
       function rememberBallMaterials() {
@@ -367,16 +445,12 @@
         requestAnimationFrame(animateBounce);
       }
 
-      /*
-        This checks whether the user's tap actually touched the Ball.glb model.
-        It does not rely on the unreliable mobile A-Frame click event.
-      */
-      function didTapBall(event) {
+      function didTapObject(event, objectElement) {
         if (
           !scene.canvas ||
           !scene.camera ||
-          !ball.object3D ||
-          !ball.object3D.visible
+          !objectElement.object3D ||
+          !objectElement.object3D.visible
         ) {
           return false;
         }
@@ -392,7 +466,7 @@
         tapRaycaster.setFromCamera(tapPointer, scene.camera);
 
         const intersections = tapRaycaster.intersectObject(
-          ball.object3D,
+          objectElement.object3D,
           true
         );
 
@@ -407,7 +481,13 @@
         activeTarget = 0;
 
         ball.setAttribute("visible", "false");
-        apple.setAttribute("visible", "true");
+
+        if (appleIsSliced) {
+          apple.setAttribute("visible", "false");
+          appleSlice.setAttribute("visible", "true");
+        } else {
+          showWholeApple();
+        }
 
         applyOrientation(appleTarget, appleOrientation);
       }
@@ -416,6 +496,7 @@
         activeTarget = 1;
 
         apple.setAttribute("visible", "false");
+        appleSlice.setAttribute("visible", "false");
 
         if (!ballIsBouncing) {
           resetBall();
@@ -433,6 +514,8 @@
         if (activeTarget !== 0) return;
 
         apple.setAttribute("visible", "false");
+        appleSlice.setAttribute("visible", "false");
+
         activeTarget = null;
       });
 
@@ -440,6 +523,7 @@
         if (activeTarget !== 1) return;
 
         ball.setAttribute("visible", "false");
+
         activeTarget = null;
       });
 
@@ -476,8 +560,15 @@
       }
 
       function getActiveModel() {
-        if (activeTarget === 0) return apple.object3D;
-        if (activeTarget === 1) return ball.object3D;
+        if (activeTarget === 0) {
+          return appleIsSliced
+            ? appleSlice.object3D
+            : apple.object3D;
+        }
+
+        if (activeTarget === 1) {
+          return ball.object3D;
+        }
 
         return null;
       }
@@ -567,16 +658,10 @@
       function finishPointer(event) {
         const tapStart = tapStarts.get(event.pointerId);
 
-        /*
-          A tap is a touch that moved less than 12 pixels.
-          If that tap hits Ball.glb, start the bounce animation.
-        */
         if (
           event.type === "pointerup" &&
           tapStart &&
-          pointers.size === 1 &&
-          activeTarget === 1 &&
-          !ballIsBouncing
+          pointers.size === 1
         ) {
           const movedX = event.clientX - tapStart.x;
           const movedY = event.clientY - tapStart.y;
@@ -585,8 +670,25 @@
             movedX * movedX + movedY * movedY
           );
 
-          if (tapDistance < 12 && didTapBall(event)) {
-            bounceBall();
+          if (tapDistance < 12) {
+            if (activeTarget === 0) {
+              if (!appleIsSliced && didTapObject(event, apple)) {
+                sliceApple();
+              } else if (
+                appleIsSliced &&
+                didTapObject(event, appleSlice)
+              ) {
+                showWholeApple();
+              }
+            }
+
+            if (
+              activeTarget === 1 &&
+              !ballIsBouncing &&
+              didTapObject(event, ball)
+            ) {
+              bounceBall();
+            }
           }
         }
 
