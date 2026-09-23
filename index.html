@@ -18,11 +18,6 @@
 
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
-
-<!-- =========================================================
-     MINDAR
-     ========================================================= -->
-
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
 
@@ -34,101 +29,29 @@
 
 html,
 body {
-
     margin: 0;
     padding: 0;
-
     width: 100%;
     height: 100%;
-
     overflow: hidden;
-
-    background: transparent;
-
+    background: black;
 }
-
-
-/* =========================================================
-   MINDAR CAMERA VIDEO
-   ========================================================= */
-
-video {
-
-    position: fixed !important;
-
-    top: 0 !important;
-    left: 0 !important;
-
-    width: 100vw !important;
-    height: 100vh !important;
-
-    object-fit: cover !important;
-
-    z-index: 0 !important;
-
-    display: block !important;
-
-    visibility: visible !important;
-
-    opacity: 1 !important;
-
-}
-
-
-/* =========================================================
-   A-FRAME
-   ========================================================= */
 
 a-scene {
-
-    position: fixed !important;
-
-    top: 0;
-    left: 0;
-
-    width: 100vw !important;
-    height: 100vh !important;
-
-    z-index: 1 !important;
-
-    background: transparent !important;
-
+    width: 100%;
+    height: 100%;
 }
-
-
-/* =========================================================
-   A-FRAME CANVAS
-   ========================================================= */
 
 canvas {
-
-    position: fixed !important;
-
-    top: 0 !important;
-    left: 0 !important;
-
-    width: 100vw !important;
-    height: 100vh !important;
-
-    background: transparent !important;
-
-    z-index: 1 !important;
-
     touch-action: none !important;
-
 }
 
-
-/* =========================================================
-   HIDE MINDAR UI
-   ========================================================= */
+/* Hide MindAR UI */
 
 .mindar-ui-loading,
 .mindar-ui-scanning,
 .mindar-ui-error {
-
     display: none !important;
-
 }
 
 </style>
@@ -144,22 +67,16 @@ canvas {
      ========================================================= -->
 
 <a-scene
-
     mindar-image="
         imageTargetSrc: ./targets.mind;
-
         autoStart: true;
-
         uiScanning: no;
         uiLoading: no;
         uiError: no;
-
         warmupTolerance: 3;
-        missTolerance: 1;
-
+        missTolerance: 2;
         filterMinCF: 0.0005;
         filterBeta: 0.001;
-
         maxTrack: 1;
     "
 
@@ -168,7 +85,6 @@ canvas {
     renderer="
         colorManagement: true;
         antialias: true;
-        alpha: true;
     "
 
     vr-mode-ui="enabled: false"
@@ -209,8 +125,7 @@ canvas {
 
 
 <!-- =========================================================
-     APPLE
-     TARGET INDEX 0
+     APPLE TARGET
      ========================================================= -->
 
 <a-entity
@@ -223,9 +138,7 @@ canvas {
         <a-entity id="appleRotation">
 
             <a-gltf-model
-
                 id="apple"
-
                 src="#appleModel"
 
                 position="0 0 0"
@@ -235,7 +148,6 @@ canvas {
                 scale="4.54545 4.54545 4.54545"
 
                 visible="false"
-
             ></a-gltf-model>
 
         </a-entity>
@@ -246,8 +158,7 @@ canvas {
 
 
 <!-- =========================================================
-     BALL
-     TARGET INDEX 1
+     BALL TARGET
      ========================================================= -->
 
 <a-entity
@@ -260,9 +171,7 @@ canvas {
         <a-entity id="ballRotation">
 
             <a-gltf-model
-
                 id="ball"
-
                 src="#ballModel"
 
                 position="0 0 0"
@@ -272,7 +181,6 @@ canvas {
                 scale="4.54545 4.54545 4.54545"
 
                 visible="false"
-
             ></a-gltf-model>
 
         </a-entity>
@@ -291,748 +199,751 @@ canvas {
 
 <script>
 
-const THREE = AFRAME.THREE;
+document.addEventListener("DOMContentLoaded", () => {
+
+    const THREE = AFRAME.THREE;
 
 
-/* =========================================================
-   ELEMENTS
-   ========================================================= */
+    // ========================================================
+    // ELEMENTS
+    // ========================================================
 
-const scene =
-    document.querySelector("a-scene");
+    const appleTarget =
+        document.querySelector("#appleTarget");
 
-const appleTarget =
-    document.querySelector("#appleTarget");
+    const ballTarget =
+        document.querySelector("#ballTarget");
 
-const ballTarget =
-    document.querySelector("#ballTarget");
+    const apple =
+        document.querySelector("#apple");
 
-const appleOrientation =
-    document.querySelector("#appleOrientation");
+    const ball =
+        document.querySelector("#ball");
 
-const ballOrientation =
-    document.querySelector("#ballOrientation");
+    const appleOrientation =
+        document.querySelector("#appleOrientation");
 
-const appleRotation =
-    document.querySelector("#appleRotation");
+    const ballOrientation =
+        document.querySelector("#ballOrientation");
 
-const ballRotation =
-    document.querySelector("#ballRotation");
+    const appleRotation =
+        document.querySelector("#appleRotation");
 
-const apple =
-    document.querySelector("#apple");
+    const ballRotation =
+        document.querySelector("#ballRotation");
 
-const ball =
-    document.querySelector("#ball");
-
-
-/* =========================================================
-   ACTIVE TARGET
-   ========================================================= */
-
-let activeTarget = null;
+    const scene =
+        document.querySelector("a-scene");
 
 
-/* =========================================================
-   FLOOR CORRECTION
-   ========================================================= */
+    // ========================================================
+    // ACTIVE TARGET
+    // ========================================================
 
-const FLOOR_CORRECTION =
-    new THREE.Quaternion().setFromEuler(
+    let activeTarget = null;
 
+
+    // ========================================================
+    // BASE SCALE
+    //
+    // Target physical width = 22 cm
+    //
+    // Apple = approximately 7.6 cm
+    // Ball  = approximately 24.15 cm
+    //
+    // Both GLBs were modeled at their correct dimensions,
+    // therefore the same AR conversion factor is used.
+    // ========================================================
+
+    const BASE_SCALE = 4.54545;
+
+
+    apple.object3D.scale.set(
+        BASE_SCALE,
+        BASE_SCALE,
+        BASE_SCALE
+    );
+
+    ball.object3D.scale.set(
+        BASE_SCALE,
+        BASE_SCALE,
+        BASE_SCALE
+    );
+
+
+    // ========================================================
+    // FLOOR ORIENTATION
+    //
+    // MindAR target normally lies in the XY plane.
+    //
+    // This correction allows the tracked object to stand
+    // correctly when the target image is lying flat on a floor.
+    // ========================================================
+
+    const FLOOR_CORRECTION =
+        new THREE.Quaternion();
+
+    FLOOR_CORRECTION.setFromEuler(
         new THREE.Euler(
             -Math.PI / 2,
             0,
             0,
             "XYZ"
         )
-
     );
 
 
-/* =========================================================
-   IDENTITY
-   ========================================================= */
+    // ========================================================
+    // TRACKING STABILITY
+    // ========================================================
 
-const IDENTITY =
-    new THREE.Quaternion();
+    let trackingFrames = 0;
 
-
-/* =========================================================
-   CAMERA VIDEO FIX
-   =========================================================
-
-   MindAR creates the camera video dynamically.
-
-   We force the video element to remain visible
-   and behind the transparent A-Frame canvas.
-   ========================================================= */
-
-function fixCameraVideo() {
-
-    const videos =
-        document.querySelectorAll("video");
+    const REQUIRED_FRAMES = 4;
 
 
-    videos.forEach(function(video) {
+    // ========================================================
+    // APPLY ORIENTATION
+    // ========================================================
 
-        video.style.position = "fixed";
+    function applyAppleOrientation() {
 
-        video.style.top = "0px";
+        if (!appleTarget.object3D) return;
 
-        video.style.left = "0px";
+        const targetObject =
+            appleTarget.object3D;
 
-        video.style.width = "100vw";
+        const normal =
+            new THREE.Vector3(
+                0,
+                0,
+                1
+            );
 
-        video.style.height = "100vh";
+        normal.applyQuaternion(
+            targetObject.quaternion
+        );
 
-        video.style.objectFit = "cover";
-
-        video.style.zIndex = "0";
-
-        video.style.display = "block";
-
-        video.style.visibility = "visible";
-
-        video.style.opacity = "1";
-
-    });
-
-
-    const canvas =
-        document.querySelector("canvas");
+        const vertical =
+            Math.abs(normal.y) < 0.5;
 
 
-    if (canvas) {
+        if (vertical) {
 
-        canvas.style.position = "fixed";
+            appleOrientation.object3D
+                .quaternion
+                .identity();
 
-        canvas.style.top = "0px";
+        } else {
 
-        canvas.style.left = "0px";
-
-        canvas.style.width = "100vw";
-
-        canvas.style.height = "100vh";
-
-        canvas.style.zIndex = "1";
-
-        canvas.style.background = "transparent";
-
-    }
-
-}
-
-
-/* =========================================================
-   RUN CAMERA FIX
-   ========================================================= */
-
-setTimeout(
-    fixCameraVideo,
-    100
-);
-
-setTimeout(
-    fixCameraVideo,
-    500
-);
-
-setTimeout(
-    fixCameraVideo,
-    1000
-);
-
-setTimeout(
-    fixCameraVideo,
-    2000
-);
-
-
-/* =========================================================
-   OBSERVE NEW VIDEO ELEMENTS
-   ========================================================= */
-
-const observer =
-    new MutationObserver(
-        function() {
-
-            fixCameraVideo();
+            appleOrientation.object3D
+                .quaternion
+                .copy(FLOOR_CORRECTION);
 
         }
-    );
 
-
-observer.observe(
-    document.body,
-    {
-        childList: true,
-        subtree: true
-    }
-);
-
-
-/* =========================================================
-   ORIENTATION
-   ========================================================= */
-
-function applyOrientation(
-    target,
-    orientation
-) {
-
-    if (!target || !orientation) {
-        return;
     }
 
 
-    const normal =
-        new THREE.Vector3(
-            0,
-            0,
-            1
+    function applyBallOrientation() {
+
+        if (!ballTarget.object3D) return;
+
+        const targetObject =
+            ballTarget.object3D;
+
+        const normal =
+            new THREE.Vector3(
+                0,
+                0,
+                1
+            );
+
+        normal.applyQuaternion(
+            targetObject.quaternion
         );
 
-
-    normal.applyQuaternion(
-        target.object3D.quaternion
-    );
+        const vertical =
+            Math.abs(normal.y) < 0.5;
 
 
-    const isVertical =
-        Math.abs(normal.y) < 0.5;
+        if (vertical) {
 
+            ballOrientation.object3D
+                .quaternion
+                .identity();
 
-    if (isVertical) {
+        } else {
 
-        orientation.object3D.quaternion.copy(
-            IDENTITY
-        );
+            ballOrientation.object3D
+                .quaternion
+                .copy(FLOOR_CORRECTION);
 
-    } else {
-
-        orientation.object3D.quaternion.copy(
-            FLOOR_CORRECTION
-        );
+        }
 
     }
 
-}
 
+    // ========================================================
+    // TARGET FOUND
+    // ========================================================
 
-/* =========================================================
-   ACTIVATE APPLE
-   ========================================================= */
+    appleTarget.addEventListener(
+        "targetFound",
+        () => {
 
-function activateApple() {
+            activeTarget = 0;
 
-    activeTarget = 0;
-
-
-    ball.setAttribute(
-        "visible",
-        false
-    );
-
-
-    apple.setAttribute(
-        "visible",
-        true
-    );
-
-
-    applyOrientation(
-        appleTarget,
-        appleOrientation
-    );
-
-}
-
-
-/* =========================================================
-   ACTIVATE BALL
-   ========================================================= */
-
-function activateBall() {
-
-    activeTarget = 1;
-
-
-    apple.setAttribute(
-        "visible",
-        false
-    );
-
-
-    ball.setAttribute(
-        "visible",
-        true
-    );
-
-
-    applyOrientation(
-        ballTarget,
-        ballOrientation
-    );
-
-}
-
-
-/* =========================================================
-   TARGET FOUND
-   ========================================================= */
-
-appleTarget.addEventListener(
-    "targetFound",
-    function() {
-
-        activateApple();
-
-    }
-);
-
-
-ballTarget.addEventListener(
-    "targetFound",
-    function() {
-
-        activateBall();
-
-    }
-);
-
-
-/* =========================================================
-   TARGET LOST
-   ========================================================= */
-
-appleTarget.addEventListener(
-    "targetLost",
-    function() {
-
-        if (activeTarget === 0) {
+            trackingFrames = 0;
 
             apple.setAttribute(
                 "visible",
-                false
+                "true"
             );
-
-            activeTarget = null;
-
-        }
-
-    }
-);
-
-
-ballTarget.addEventListener(
-    "targetLost",
-    function() {
-
-        if (activeTarget === 1) {
 
             ball.setAttribute(
                 "visible",
-                false
+                "false"
             );
 
-            activeTarget = null;
-
         }
-
-    }
-);
-
-
-/* =========================================================
-   ORIENTATION LOOP
-   ========================================================= */
-
-function orientationLoop() {
-
-    if (activeTarget === 0) {
-
-        applyOrientation(
-            appleTarget,
-            appleOrientation
-        );
-
-    }
-
-
-    if (activeTarget === 1) {
-
-        applyOrientation(
-            ballTarget,
-            ballOrientation
-        );
-
-    }
-
-
-    requestAnimationFrame(
-        orientationLoop
     );
 
-}
 
+    ballTarget.addEventListener(
+        "targetFound",
+        () => {
 
-orientationLoop();
+            activeTarget = 1;
 
+            trackingFrames = 0;
 
-/* =========================================================
-   POINTER CONTROL
-   ========================================================= */
+            ball.setAttribute(
+                "visible",
+                "true"
+            );
 
-let pointerDown = false;
+            apple.setAttribute(
+                "visible",
+                "false"
+            );
 
-let lastX = 0;
-
-let lastY = 0;
-
-
-/* =========================================================
-   PINCH
-   ========================================================= */
-
-let pinchActive = false;
-
-let initialPinchDistance = 0;
-
-let initialScale = 4.54545;
-
-
-/* =========================================================
-   ACTIVE ROTATION
-   ========================================================= */
-
-function getActiveRotation() {
-
-    if (activeTarget === 0) {
-
-        return appleRotation;
-
-    }
-
-
-    if (activeTarget === 1) {
-
-        return ballRotation;
-
-    }
-
-
-    return null;
-
-}
-
-
-/* =========================================================
-   ACTIVE MODEL
-   ========================================================= */
-
-function getActiveModel() {
-
-    if (activeTarget === 0) {
-
-        return apple;
-
-    }
-
-
-    if (activeTarget === 1) {
-
-        return ball;
-
-    }
-
-
-    return null;
-
-}
-
-
-/* =========================================================
-   POINTER DOWN
-   ========================================================= */
-
-scene.addEventListener(
-    "pointerdown",
-    function(event) {
-
-        pointerDown = true;
-
-        lastX =
-            event.clientX;
-
-        lastY =
-            event.clientY;
-
-    }
-);
-
-
-/* =========================================================
-   POINTER MOVE
-   ========================================================= */
-
-scene.addEventListener(
-    "pointermove",
-    function(event) {
-
-        if (!pointerDown) {
-            return;
         }
-
-
-        if (pinchActive) {
-            return;
-        }
-
-
-        const rotation =
-            getActiveRotation();
-
-
-        if (!rotation) {
-            return;
-        }
-
-
-        const deltaX =
-            event.clientX -
-            lastX;
-
-
-        const deltaY =
-            event.clientY -
-            lastY;
-
-
-        rotation.object3D.rotation.y
-            += deltaX * 0.01;
-
-
-        rotation.object3D.rotation.x
-            += deltaY * 0.01;
-
-
-        lastX =
-            event.clientX;
-
-        lastY =
-            event.clientY;
-
-    }
-);
-
-
-/* =========================================================
-   POINTER UP
-   ========================================================= */
-
-scene.addEventListener(
-    "pointerup",
-    function() {
-
-        pointerDown = false;
-
-    }
-);
-
-
-scene.addEventListener(
-    "pointercancel",
-    function() {
-
-        pointerDown = false;
-
-    }
-);
-
-
-/* =========================================================
-   TOUCH DISTANCE
-   ========================================================= */
-
-function getTouchDistance(
-    touch1,
-    touch2
-) {
-
-    const dx =
-        touch1.clientX -
-        touch2.clientX;
-
-
-    const dy =
-        touch1.clientY -
-        touch2.clientY;
-
-
-    return Math.sqrt(
-        dx * dx +
-        dy * dy
     );
 
-}
 
+    // ========================================================
+    // TARGET LOST
+    // ========================================================
 
-/* =========================================================
-   TOUCH START
-   ========================================================= */
+    appleTarget.addEventListener(
+        "targetLost",
+        () => {
 
-scene.addEventListener(
-    "touchstart",
-    function(event) {
+            if (activeTarget === 0) {
 
-        if (event.touches.length === 2) {
-
-            event.preventDefault();
-
-
-            pinchActive = true;
-
-
-            initialPinchDistance =
-                getTouchDistance(
-                    event.touches[0],
-                    event.touches[1]
+                apple.setAttribute(
+                    "visible",
+                    "false"
                 );
 
-
-            const model =
-                getActiveModel();
-
-
-            if (model) {
-
-                initialScale =
-                    model.object3D.scale.x;
+                activeTarget = null;
 
             }
 
         }
-
-    },
-    {
-        passive: false
-    }
-);
+    );
 
 
-/* =========================================================
-   TOUCH MOVE
-   ========================================================= */
+    ballTarget.addEventListener(
+        "targetLost",
+        () => {
 
-scene.addEventListener(
-    "touchmove",
-    function(event) {
+            if (activeTarget === 1) {
 
-        if (
-            event.touches.length === 2 &&
-            pinchActive
-        ) {
-
-            event.preventDefault();
-
-
-            const model =
-                getActiveModel();
-
-
-            if (!model) {
-                return;
-            }
-
-
-            const currentDistance =
-                getTouchDistance(
-                    event.touches[0],
-                    event.touches[1]
+                ball.setAttribute(
+                    "visible",
+                    "false"
                 );
 
+                activeTarget = null;
+
+            }
+
+        }
+    );
+
+
+    // ========================================================
+    // STABLE TRACKING LOOP
+    // ========================================================
+
+    function trackingLoop() {
+
+        if (activeTarget !== null) {
+
+            trackingFrames++;
 
             if (
-                initialPinchDistance <= 0
+                trackingFrames >=
+                REQUIRED_FRAMES
             ) {
+
+                if (activeTarget === 0) {
+
+                    applyAppleOrientation();
+
+                }
+
+                if (activeTarget === 1) {
+
+                    applyBallOrientation();
+
+                }
+
+            }
+
+        } else {
+
+            trackingFrames = 0;
+
+        }
+
+
+        requestAnimationFrame(
+            trackingLoop
+        );
+
+    }
+
+    trackingLoop();
+
+
+    // ========================================================
+    // TOUCH / POINTER CONTROL
+    //
+    // ONE FINGER:
+    // Rotate object
+    //
+    // TWO FINGERS:
+    // Pinch to scale
+    // ========================================================
+
+    let pointerCount = 0;
+
+    const pointers = new Map();
+
+
+    let rotating = false;
+
+    let lastX = 0;
+
+    let lastY = 0;
+
+
+    let pinching = false;
+
+    let pinchStartDistance = 0;
+
+    let pinchStartScale = BASE_SCALE;
+
+
+    // ========================================================
+    // GET ACTIVE ROTATION OBJECT
+    // ========================================================
+
+    function getActiveRotationObject() {
+
+        if (activeTarget === 0) {
+
+            return appleRotation.object3D;
+
+        }
+
+        if (activeTarget === 1) {
+
+            return ballRotation.object3D;
+
+        }
+
+        return null;
+
+    }
+
+
+    // ========================================================
+    // GET ACTIVE MODEL
+    // ========================================================
+
+    function getActiveModel() {
+
+        if (activeTarget === 0) {
+
+            return apple.object3D;
+
+        }
+
+        if (activeTarget === 1) {
+
+            return ball.object3D;
+
+        }
+
+        return null;
+
+    }
+
+
+    // ========================================================
+    // POINTER DOWN
+    // ========================================================
+
+    scene.addEventListener(
+        "pointerdown",
+        (event) => {
+
+            if (activeTarget === null) {
+                return;
+            }
+
+
+            pointers.set(
+                event.pointerId,
+                {
+                    x: event.clientX,
+                    y: event.clientY
+                }
+            );
+
+
+            pointerCount =
+                pointers.size;
+
+
+            if (pointerCount === 1) {
+
+                rotating = true;
+
+                pinching = false;
+
+                lastX = event.clientX;
+
+                lastY = event.clientY;
+
+            }
+
+
+            if (pointerCount === 2) {
+
+                rotating = false;
+
+                pinching = true;
+
+
+                const values =
+                    Array.from(
+                        pointers.values()
+                    );
+
+
+                const dx =
+                    values[0].x -
+                    values[1].x;
+
+                const dy =
+                    values[0].y -
+                    values[1].y;
+
+
+                pinchStartDistance =
+                    Math.sqrt(
+                        dx * dx +
+                        dy * dy
+                    );
+
+
+                const model =
+                    getActiveModel();
+
+
+                if (model) {
+
+                    pinchStartScale =
+                        model.scale.x;
+
+                }
+
+            }
+
+        }
+    );
+
+
+    // ========================================================
+    // POINTER MOVE
+    // ========================================================
+
+    scene.addEventListener(
+        "pointermove",
+        (event) => {
+
+            if (!pointers.has(
+                event.pointerId
+            )) {
 
                 return;
 
             }
 
 
-            const ratio =
-                currentDistance /
-                initialPinchDistance;
-
-
-            let newScale =
-                initialScale * ratio;
-
-
-            newScale =
-                Math.max(
-                    0.3,
-                    Math.min(
-                        15.0,
-                        newScale
-                    )
-                );
-
-
-            model.object3D.scale.set(
-                newScale,
-                newScale,
-                newScale
+            pointers.set(
+                event.pointerId,
+                {
+                    x: event.clientX,
+                    y: event.clientY
+                }
             );
 
+
+            // =================================================
+            // ONE FINGER ROTATION
+            // =================================================
+
+            if (
+                pointers.size === 1 &&
+                rotating
+            ) {
+
+                const rotationObject =
+                    getActiveRotationObject();
+
+
+                if (!rotationObject) {
+                    return;
+                }
+
+
+                const dx =
+                    event.clientX -
+                    lastX;
+
+                const dy =
+                    event.clientY -
+                    lastY;
+
+
+                rotationObject.rotation.y
+                    += dx * 0.01;
+
+                rotationObject.rotation.x
+                    += dy * 0.01;
+
+
+                lastX =
+                    event.clientX;
+
+                lastY =
+                    event.clientY;
+
+            }
+
+
+            // =================================================
+            // TWO FINGER PINCH
+            // =================================================
+
+            if (
+                pointers.size === 2 &&
+                pinching
+            ) {
+
+                const values =
+                    Array.from(
+                        pointers.values()
+                    );
+
+
+                const dx =
+                    values[0].x -
+                    values[1].x;
+
+                const dy =
+                    values[0].y -
+                    values[1].y;
+
+
+                const distance =
+                    Math.sqrt(
+                        dx * dx +
+                        dy * dy
+                    );
+
+
+                if (
+                    pinchStartDistance <= 0
+                ) {
+
+                    return;
+
+                }
+
+
+                const factor =
+                    distance /
+                    pinchStartDistance;
+
+
+                let newScale =
+                    pinchStartScale *
+                    factor;
+
+
+                // Allow shrinking and enlarging
+                // while keeping the initial
+                // 4.54545 scale intact.
+
+                newScale =
+                    Math.max(
+                        0.3,
+                        Math.min(
+                            15.0,
+                            newScale
+                        )
+                    );
+
+
+                const model =
+                    getActiveModel();
+
+
+                if (model) {
+
+                    model.scale.set(
+                        newScale,
+                        newScale,
+                        newScale
+                    );
+
+                }
+
+            }
+
+        }
+    );
+
+
+    // ========================================================
+    // POINTER UP
+    // ========================================================
+
+    function pointerEnd(event) {
+
+        pointers.delete(
+            event.pointerId
+        );
+
+
+        pointerCount =
+            pointers.size;
+
+
+        if (pointerCount === 0) {
+
+            rotating = false;
+
+            pinching = false;
+
         }
 
-    },
-    {
-        passive: false
-    }
-);
+
+        if (pointerCount === 1) {
+
+            rotating = true;
+
+            pinching = false;
 
 
-/* =========================================================
-   TOUCH END
-   ========================================================= */
+            const remaining =
+                Array.from(
+                    pointers.values()
+                )[0];
 
-scene.addEventListener(
-    "touchend",
-    function(event) {
 
-        if (event.touches.length < 2) {
+            if (remaining) {
 
-            pinchActive = false;
+                lastX =
+                    remaining.x;
+
+                lastY =
+                    remaining.y;
+
+            }
 
         }
 
     }
-);
 
 
-/* =========================================================
-   PREVENT SCROLLING
-   ========================================================= */
+    scene.addEventListener(
+        "pointerup",
+        pointerEnd
+    );
 
-document.addEventListener(
-    "touchmove",
-    function(event) {
+    scene.addEventListener(
+        "pointercancel",
+        pointerEnd
+    );
 
-        if (event.touches.length > 0) {
+    scene.addEventListener(
+        "pointerleave",
+        pointerEnd
+    );
+
+
+    // ========================================================
+    // PREVENT DEFAULT TOUCH BEHAVIOR
+    // ========================================================
+
+    scene.addEventListener(
+        "touchstart",
+        (event) => {
 
             event.preventDefault();
 
+        },
+        {
+            passive: false
         }
+    );
 
-    },
-    {
-        passive: false
-    }
-);
+
+    scene.addEventListener(
+        "touchmove",
+        (event) => {
+
+            event.preventDefault();
+
+        },
+        {
+            passive: false
+        }
+    );
+
+
+    scene.addEventListener(
+        "touchend",
+        (event) => {
+
+            event.preventDefault();
+
+        },
+        {
+            passive: false
+        }
+    );
+
+
+});
 
 </script>
 
