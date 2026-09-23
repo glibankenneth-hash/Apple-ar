@@ -61,7 +61,7 @@ canvas {
 }
 
 
-/* Hide MindAR's default UI */
+/* Hide MindAR UI */
 
 .mindar-ui-loading,
 .mindar-ui-scanning,
@@ -94,7 +94,7 @@ canvas {
         uiLoading: no;
         uiError: no;
 
-        warmupTolerance: 1;
+        warmupTolerance: 3;
         missTolerance: 1;
 
         filterMinCF: 0.0005;
@@ -157,11 +157,7 @@ canvas {
     mindar-image-target="targetIndex: 0"
 >
 
-    <!-- Orientation correction -->
-
     <a-entity id="appleOrientation">
-
-        <!-- User rotation -->
 
         <a-entity id="appleRotation">
 
@@ -198,11 +194,7 @@ canvas {
     mindar-image-target="targetIndex: 1"
 >
 
-    <!-- Orientation correction -->
-
     <a-entity id="ballOrientation">
-
-        <!-- User rotation -->
 
         <a-entity id="ballRotation">
 
@@ -271,7 +263,7 @@ const ball =
 
 
 /* =========================================================
-   CURRENT ACTIVE TARGET
+   ACTIVE TARGET
 
    0 = Apple
    1 = Ball
@@ -282,23 +274,20 @@ let activeTarget = null;
 
 
 /* =========================================================
-   FLOOR ROTATION
+   FLOOR CORRECTION
 
-   When the page is lying flat on the floor,
-   rotate the object so it stands upward
-   from the bottom of the page.
+   Makes the object stand upright when
+   the target page is lying flat.
    ========================================================= */
 
 const FLOOR_CORRECTION =
     new THREE.Quaternion().setFromEuler(
 
         new THREE.Euler(
-
             -Math.PI / 2,
             0,
             0,
             "XYZ"
-
         )
 
     );
@@ -315,36 +304,31 @@ const IDENTITY =
 
 
 /* =========================================================
-   GET TARGET ORIENTATION
-
-   Determines whether the tracked page is:
-
-   - vertical
-   - horizontal / floor
-
+   APPLY ORIENTATION
    ========================================================= */
 
 function applyOrientation(target, orientation) {
 
-    if (!target || !orientation) return;
-
-
-    const targetQuaternion =
-        target.object3D.quaternion;
+    if (!target || !orientation) {
+        return;
+    }
 
 
     const normal =
         new THREE.Vector3(0, 0, 1);
 
-    normal.applyQuaternion(targetQuaternion);
+
+    normal.applyQuaternion(
+        target.object3D.quaternion
+    );
 
 
     /*
-        If Y is close to zero,
-        the page is approximately vertical.
+        Vertical page:
+        keep normal orientation.
 
-        If Y is large,
-        the page is approximately horizontal.
+        Horizontal page:
+        apply floor correction.
     */
 
     const isVertical =
@@ -369,10 +353,14 @@ function applyOrientation(target, orientation) {
 
 
 /* =========================================================
-   APPLE ACTIVATION
+   ACTIVATE APPLE
    ========================================================= */
 
 function activateApple() {
+
+    /*
+        Apple becomes active immediately.
+    */
 
     activeTarget = 0;
 
@@ -398,7 +386,7 @@ function activateApple() {
 
 
     /*
-        Apply current page orientation.
+        Apply correct orientation.
     */
 
     applyOrientation(
@@ -410,10 +398,14 @@ function activateApple() {
 
 
 /* =========================================================
-   BALL ACTIVATION
+   ACTIVATE BALL
    ========================================================= */
 
 function activateBall() {
+
+    /*
+        Ball becomes active immediately.
+    */
 
     activeTarget = 1;
 
@@ -439,7 +431,7 @@ function activateBall() {
 
 
     /*
-        Apply current page orientation.
+        Apply correct orientation.
     */
 
     applyOrientation(
@@ -451,7 +443,7 @@ function activateBall() {
 
 
 /* =========================================================
-   TARGET FOUND
+   APPLE FOUND
    ========================================================= */
 
 appleTarget.addEventListener(
@@ -459,10 +451,9 @@ appleTarget.addEventListener(
     function () {
 
         /*
+            NO WAITING.
+            NO FRAME DELAY.
             Switch immediately.
-
-            No frame waiting.
-            No artificial delay.
         */
 
         activateApple();
@@ -471,15 +462,18 @@ appleTarget.addEventListener(
 );
 
 
+/* =========================================================
+   BALL FOUND
+   ========================================================= */
+
 ballTarget.addEventListener(
     "targetFound",
     function () {
 
         /*
+            NO WAITING.
+            NO FRAME DELAY.
             Switch immediately.
-
-            No frame waiting.
-            No artificial delay.
         */
 
         activateBall();
@@ -489,7 +483,7 @@ ballTarget.addEventListener(
 
 
 /* =========================================================
-   TARGET LOST
+   APPLE LOST
    ========================================================= */
 
 appleTarget.addEventListener(
@@ -497,11 +491,11 @@ appleTarget.addEventListener(
     function () {
 
         /*
-            Only hide Apple if Apple
-            is still the active target.
+            Important:
 
-            This prevents an old targetLost
-            event from hiding the new object.
+            If Ball was already found,
+            do NOT let Apple's targetLost
+            event hide the Ball.
         */
 
         if (activeTarget === 0) {
@@ -519,13 +513,18 @@ appleTarget.addEventListener(
 );
 
 
+/* =========================================================
+   BALL LOST
+   ========================================================= */
+
 ballTarget.addEventListener(
     "targetLost",
     function () {
 
         /*
-            Only hide Ball if Ball
-            is still the active target.
+            If Apple was already found,
+            do NOT let Ball's targetLost
+            event hide the Apple.
         */
 
         if (activeTarget === 1) {
@@ -545,13 +544,9 @@ ballTarget.addEventListener(
 
 /* =========================================================
    CONTINUOUS ORIENTATION UPDATE
-
-   This keeps the object correctly oriented
-   while the physical page is being rotated.
    ========================================================= */
 
 function orientationLoop() {
-
 
     if (activeTarget === 0) {
 
@@ -610,7 +605,7 @@ let initialScale = 4.54545;
 
 
 /* =========================================================
-   GET ACTIVE ROTATION OBJECT
+   GET ACTIVE ROTATION
    ========================================================= */
 
 function getActiveRotation() {
@@ -621,11 +616,13 @@ function getActiveRotation() {
 
     }
 
+
     if (activeTarget === 1) {
 
         return ballRotation;
 
     }
+
 
     return null;
 
@@ -644,11 +641,13 @@ function getActiveModel() {
 
     }
 
+
     if (activeTarget === 1) {
 
         return ball;
 
     }
+
 
     return null;
 
@@ -681,16 +680,23 @@ scene.addEventListener(
     "pointermove",
     function (event) {
 
-        if (!pointerDown) return;
+        if (!pointerDown) {
+            return;
+        }
 
-        if (pinchActive) return;
+
+        if (pinchActive) {
+            return;
+        }
 
 
         const rotation =
             getActiveRotation();
 
 
-        if (!rotation) return;
+        if (!rotation) {
+            return;
+        }
 
 
         const deltaX =
@@ -702,16 +708,18 @@ scene.addEventListener(
 
 
         /*
-            Horizontal movement rotates
-            around vertical axis.
-
-            Vertical movement rotates
-            around horizontal axis.
+            Horizontal finger movement
+            rotates around Y.
         */
 
         rotation.object3D.rotation.y
             += deltaX * 0.01;
 
+
+        /*
+            Vertical finger movement
+            rotates around X.
+        */
 
         rotation.object3D.rotation.x
             += deltaY * 0.01;
@@ -753,16 +761,24 @@ scene.addEventListener(
    TOUCH DISTANCE
    ========================================================= */
 
-function getTouchDistance(touch1, touch2) {
+function getTouchDistance(
+    touch1,
+    touch2
+) {
 
     const dx =
-        touch1.clientX - touch2.clientX;
+        touch1.clientX -
+        touch2.clientX;
+
 
     const dy =
-        touch1.clientY - touch2.clientY;
+        touch1.clientY -
+        touch2.clientY;
+
 
     return Math.sqrt(
-        dx * dx + dy * dy
+        dx * dx +
+        dy * dy
     );
 
 }
@@ -831,7 +847,9 @@ scene.addEventListener(
                 getActiveModel();
 
 
-            if (!model) return;
+            if (!model) {
+                return;
+            }
 
 
             const currentDistance =
@@ -851,21 +869,16 @@ scene.addEventListener(
                 initialPinchDistance;
 
 
-            /*
-                Start from the model's
-                current scale.
-
-                Allows both shrinking
-                and enlarging.
-            */
-
             let newScale =
                 initialScale * ratio;
 
 
             /*
-                Prevent the object from becoming
-                impossibly small or huge.
+                Minimum scale:
+                0.3
+
+                Maximum scale:
+                15
             */
 
             newScale =
