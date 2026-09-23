@@ -8,7 +8,7 @@
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
 >
 
-<title>Apple AR</title>
+<title>Apple + Ball AR</title>
 
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
@@ -44,7 +44,7 @@ canvas {
 
 
 /* =========================================================
-   COMPLETELY HIDE MIN DAR UI
+   COMPLETELY HIDE MINDAR UI
    ========================================================= */
 
 .mindar-ui-scanning,
@@ -75,6 +75,8 @@ canvas {
 
         filterMinCF: 0.0005;
         filterBeta: 0.001;
+
+        maxTrack: 1;
     "
 
     color-space="sRGB"
@@ -92,6 +94,10 @@ canvas {
 >
 
 
+<!-- =========================================================
+     MODELS
+     ========================================================= -->
+
 <a-assets>
 
     <a-asset-item
@@ -99,8 +105,18 @@ canvas {
         src="./Apple.glb">
     </a-asset-item>
 
+    <a-asset-item
+        id="ballModel"
+        src="./Ball.glb">
+    </a-asset-item>
+
 </a-assets>
 
+
+
+<!-- =========================================================
+     CAMERA
+     ========================================================= -->
 
 <a-camera
     position="0 0 0"
@@ -108,28 +124,24 @@ canvas {
 </a-camera>
 
 
+
+<!-- =========================================================
+     APPLE TARGET
+     TARGET 0
+     ========================================================= -->
+
 <a-entity
-    id="imageTarget"
+    id="appleTarget"
     mindar-image-target="targetIndex: 0"
 >
 
 
-    <!--
-        TARGET ORIENTATION
-
-        This layer handles whether the page is
-        vertical or lying flat.
-    -->
+    <!-- TARGET ORIENTATION -->
 
     <a-entity id="appleOrientation">
 
 
-        <!--
-            USER ROTATION
-
-            This layer contains the user's
-            touch rotation.
-        -->
+        <!-- USER ROTATION -->
 
         <a-entity id="appleRotation">
 
@@ -159,6 +171,38 @@ canvas {
 </a-entity>
 
 
+
+<!-- =========================================================
+     BALL TARGET
+     TARGET 1
+     ========================================================= -->
+
+<a-entity
+    id="ballTarget"
+    mindar-image-target="targetIndex: 1"
+>
+
+
+    <a-gltf-model
+        id="ball"
+
+        src="#ballModel"
+
+        position="0 0 0"
+
+        rotation="0 0 0"
+
+        scale="1 1 1"
+
+        visible="false"
+    >
+    </a-gltf-model>
+
+
+</a-entity>
+
+
+
 </a-scene>
 
 
@@ -181,9 +225,13 @@ document.addEventListener(
             );
 
 
-        const target =
+        /* -----------------------------------------------------
+           APPLE
+           ----------------------------------------------------- */
+
+        const appleTarget =
             document.querySelector(
-                "#imageTarget"
+                "#appleTarget"
             );
 
 
@@ -205,6 +253,22 @@ document.addEventListener(
             );
 
 
+        /* -----------------------------------------------------
+           BALL
+           ----------------------------------------------------- */
+
+        const ballTarget =
+            document.querySelector(
+                "#ballTarget"
+            );
+
+
+        const ball =
+            document.querySelector(
+                "#ball"
+            );
+
+
         const THREE =
             AFRAME.THREE;
 
@@ -218,33 +282,13 @@ document.addEventListener(
             false;
 
 
-        /*
-            TRUE when MindAR has lost the target.
-
-            While TRUE, the target is NOT allowed
-            to modify the Apple anymore.
-        */
-
         let poseLocked =
             true;
 
 
-        /*
-            Prevents the target from changing the
-            Apple orientation during the unstable
-            edge-tracking period.
-        */
-
         let stableTracking =
             false;
 
-
-        /*
-            Number of consecutive good frames.
-
-            We don't immediately trust a newly
-            detected target.
-        */
 
         let stableFrames =
             0;
@@ -330,7 +374,7 @@ document.addEventListener(
             }
 
 
-            target.object3D.getWorldQuaternion(
+            appleTarget.object3D.getWorldQuaternion(
                 targetQuaternion
             );
 
@@ -351,18 +395,6 @@ document.addEventListener(
                 );
 
 
-            /*
-                VERY IMPORTANT:
-
-                Ignore the dangerous middle zone.
-
-                When the phone is almost looking away
-                from the page, MindAR's estimated
-                orientation can jump.
-
-                We simply don't change mode there.
-            */
-
             if (
                 verticalDot > 0.70
             ) {
@@ -380,12 +412,6 @@ document.addEventListener(
 
             }
 
-
-            /*
-                Uncertain orientation.
-
-                Keep whatever mode was already stable.
-            */
 
             return currentMode;
 
@@ -439,11 +465,6 @@ document.addEventListener(
             modeConfirmFrames++;
 
 
-            /*
-                Require many consecutive frames
-                before changing floor/vertical mode.
-            */
-
             if (
                 modeConfirmFrames >= 20 &&
                 currentMode !== pendingMode
@@ -464,11 +485,6 @@ document.addEventListener(
 
         function applyTargetOrientation() {
 
-
-            /*
-                NEVER modify the Apple while
-                pose is locked.
-            */
 
             if (
                 !targetIsTracked ||
@@ -536,7 +552,6 @@ document.addEventListener(
             rotationX +=
                 deltaY *
                 ROTATION_SPEED;
-
 
 
             if (
@@ -796,7 +811,6 @@ document.addEventListener(
                 pointers.size === 1
             ) {
 
-
                 rotationPointerId =
                     event.pointerId;
 
@@ -812,10 +826,8 @@ document.addEventListener(
                 isRotating =
                     true;
 
-
             }
             else {
-
 
                 isRotating =
                     false;
@@ -884,7 +896,6 @@ document.addEventListener(
             );
 
 
-
             if (
                 pointers.size === 1 &&
                 isRotating &&
@@ -915,7 +926,6 @@ document.addEventListener(
 
                 previousY =
                     event.clientY;
-
 
             }
             else if (
@@ -1024,26 +1034,27 @@ document.addEventListener(
 
 
         /* =====================================================
-           TARGET FOUND
+           APPLE TARGET FOUND
            ===================================================== */
 
-        target.addEventListener(
+        appleTarget.addEventListener(
             "targetFound",
             function () {
 
 
+                /* Hide Ball */
+
+                ball.setAttribute(
+                    "visible",
+                    false
+                );
+
+
+                /* Apple is now the active object */
+
                 targetIsTracked =
                     true;
 
-
-                /*
-                    IMPORTANT:
-
-                    Start locked.
-
-                    We don't immediately trust
-                    the first few frames of tracking.
-                */
 
                 poseLocked =
                     true;
@@ -1065,10 +1076,7 @@ document.addEventListener(
                     0;
 
 
-                /*
-                    Apple becomes visible immediately,
-                    but its LAST GOOD pose is preserved.
-                */
+                /* Show Apple */
 
                 apple.setAttribute(
                     "visible",
@@ -1096,22 +1104,19 @@ document.addEventListener(
 
 
         /* =====================================================
-           TARGET LOST
+           APPLE TARGET LOST
            ===================================================== */
 
-        target.addEventListener(
+        appleTarget.addEventListener(
             "targetLost",
             function () {
 
 
                 /*
-                    THIS IS THE MOST IMPORTANT PART.
+                    Lock Apple immediately.
 
-                    Immediately lock the Apple.
-
-                    From this point forward,
-                    MindAR cannot change its
-                    orientation through our code.
+                    Its rotation, scale and orientation
+                    are NOT reset.
                 */
 
                 poseLocked =
@@ -1129,15 +1134,6 @@ document.addEventListener(
                 targetIsTracked =
                     false;
 
-
-                /*
-                    Hide the Apple.
-
-                    Its exact rotation,
-                    scale,
-                    floor mode and user
-                    rotation remain untouched.
-                */
 
                 apple.setAttribute(
                     "visible",
@@ -1158,6 +1154,78 @@ document.addEventListener(
 
                 pinchStartDistance =
                     null;
+
+            }
+        );
+
+
+
+        /* =====================================================
+           BALL TARGET FOUND
+           ===================================================== */
+
+        ballTarget.addEventListener(
+            "targetFound",
+            function () {
+
+
+                /*
+                    Hide Apple immediately.
+
+                    This prevents both objects from
+                    appearing when changing pages.
+                */
+
+                apple.setAttribute(
+                    "visible",
+                    false
+                );
+
+
+                /* Show Ball */
+
+                ball.setAttribute(
+                    "visible",
+                    true
+                );
+
+
+                /*
+                    Clear Apple touch state.
+                */
+
+                pointers.clear();
+
+
+                rotationPointerId =
+                    null;
+
+
+                isRotating =
+                    false;
+
+
+                pinchStartDistance =
+                    null;
+
+            }
+        );
+
+
+
+        /* =====================================================
+           BALL TARGET LOST
+           ===================================================== */
+
+        ballTarget.addEventListener(
+            "targetLost",
+            function () {
+
+
+                ball.setAttribute(
+                    "visible",
+                    false
+                );
 
             }
         );
@@ -1253,15 +1321,12 @@ document.addEventListener(
 
 
             /*
-                -------------------------------------------------
-                STABLE-POSE GATE
-                -------------------------------------------------
+                Apple stable-pose gate.
 
-                MindAR may report targetFound before
-                the pose is completely stable.
-
-                We wait for several frames before allowing
-                the target to influence the Apple.
+                We wait for several frames after
+                detecting the Apple page before
+                allowing MindAR to influence
+                its floor/vertical orientation.
             */
 
             if (
@@ -1279,11 +1344,6 @@ document.addEventListener(
                 ) {
 
 
-                    /*
-                        Now tracking is considered
-                        stable enough to update.
-                    */
-
                     stableTracking =
                         true;
 
@@ -1291,10 +1351,6 @@ document.addEventListener(
                     poseLocked =
                         false;
 
-
-                    /*
-                        Capture the mode only now.
-                    */
 
                     pendingMode =
                         currentMode;
@@ -1308,10 +1364,9 @@ document.addEventListener(
             }
 
 
-
             /*
-                Only update target orientation when
-                the tracking gate is open.
+                Only update Apple orientation
+                when tracking is stable.
             */
 
             if (
@@ -1325,7 +1380,6 @@ document.addEventListener(
                 applyTargetOrientation();
 
             }
-
 
 
             requestAnimationFrame(
@@ -1354,6 +1408,12 @@ document.addEventListener(
 
 
         apple.setAttribute(
+            "visible",
+            false
+        );
+
+
+        ball.setAttribute(
             "visible",
             false
         );
