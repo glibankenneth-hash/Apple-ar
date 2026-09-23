@@ -22,7 +22,14 @@ content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
 <!-- =========================================================
-     CAMERA / PAGE LAYOUT
+     BASIC PAGE STYLE
+     
+     IMPORTANT:
+     NO CUSTOM VIDEO CSS.
+     NO VIDEO Z-INDEX.
+     NO CANVAS Z-INDEX.
+     
+     This keeps MindAR's native camera handling intact.
      ========================================================= -->
 
 <style>
@@ -42,74 +49,12 @@ body {
 
 }
 
-/*
-   Keep the A-Frame scene full screen.
-*/
-
 a-scene {
-
-    position: fixed;
-
-    top: 0;
-    left: 0;
 
     width: 100%;
     height: 100%;
 
 }
-
-/*
-   IMPORTANT:
-   MindAR creates the live camera <video> itself.
-
-   This makes sure that video remains visible behind
-   the AR canvas.
-*/
-
-video.mindar-video {
-
-    position: fixed !important;
-
-    top: 0 !important;
-    left: 0 !important;
-
-    width: 100% !important;
-    height: 100% !important;
-
-    object-fit: cover !important;
-
-    display: block !important;
-
-    visibility: visible !important;
-
-    opacity: 1 !important;
-
-    z-index: 0 !important;
-
-}
-
-/*
-   Keep the AR canvas above the camera.
-*/
-
-.a-canvas {
-
-    position: fixed !important;
-
-    top: 0 !important;
-    left: 0 !important;
-
-    width: 100% !important;
-    height: 100% !important;
-
-    z-index: 1 !important;
-
-}
-
-/*
-   Prevent browser touch gestures from interfering
-   with our one-finger rotation / two-finger pinch.
-*/
 
 canvas {
 
@@ -118,9 +63,7 @@ canvas {
 }
 
 
-/*
-   Hide MindAR's default UI.
-*/
+/* Hide MindAR UI */
 
 .mindar-ui-loading,
 .mindar-ui-scanning,
@@ -137,7 +80,7 @@ canvas {
 <body>
 
 <!-- =========================================================
-     AR SCENE
+     A-FRAME / MINDAR
      ========================================================= -->
 
 <a-scene
@@ -145,7 +88,6 @@ canvas {
 ```
 mindar-image="
     imageTargetSrc: ./targets.mind;
-
     autoStart: true;
 
     uiScanning: no;
@@ -179,7 +121,7 @@ embedded
 >
 
 <!-- =========================================================
-     MODELS
+     ASSETS
      ========================================================= -->
 
 <a-assets>
@@ -207,7 +149,7 @@ embedded
  look-controls="enabled: false"> </a-camera>
 
 <!-- =========================================================
-     APPLE TARGET
+     APPLE PAGE / TARGET 0
      ========================================================= -->
 
 <a-entity
@@ -245,7 +187,7 @@ mindar-image-target="targetIndex: 0"
 </a-entity>
 
 <!-- =========================================================
-     BALL TARGET
+     BALL PAGE / TARGET 1
      ========================================================= -->
 
 <a-entity
@@ -286,20 +228,15 @@ mindar-image-target="targetIndex: 1"
 
 <script>
 
-
-/* =========================================================
-   INITIALIZATION
-   ========================================================= */
-
 document.addEventListener("DOMContentLoaded", () => {
 
 
     const THREE = AFRAME.THREE;
 
 
-    /* -----------------------------------------------------
-       TARGETS
-       ----------------------------------------------------- */
+    /* =====================================================
+       ELEMENTS
+       ===================================================== */
 
     const appleTarget =
         document.querySelector("#appleTarget");
@@ -308,20 +245,12 @@ document.addEventListener("DOMContentLoaded", () => {
         document.querySelector("#ballTarget");
 
 
-    /* -----------------------------------------------------
-       MODELS
-       ----------------------------------------------------- */
-
     const apple =
         document.querySelector("#apple");
 
     const ball =
         document.querySelector("#ball");
 
-
-    /* -----------------------------------------------------
-       ORIENTATION
-       ----------------------------------------------------- */
 
     const appleOrientation =
         document.querySelector("#appleOrientation");
@@ -330,20 +259,12 @@ document.addEventListener("DOMContentLoaded", () => {
         document.querySelector("#ballOrientation");
 
 
-    /* -----------------------------------------------------
-       ROTATION
-       ----------------------------------------------------- */
-
     const appleRotation =
         document.querySelector("#appleRotation");
 
     const ballRotation =
         document.querySelector("#ballRotation");
 
-
-    /* -----------------------------------------------------
-       SCENE
-       ----------------------------------------------------- */
 
     const scene =
         document.querySelector("a-scene");
@@ -357,13 +278,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* =====================================================
-       BASE MODEL SCALE
-
-       22 cm target page
-       Apple ≈ 7.6 cm
-       Ball ≈ 24.15 cm
-
-       DO NOT CHANGE THIS.
+       ORIGINAL MODEL SCALE
        ===================================================== */
 
     const BASE_SCALE = 4.54545;
@@ -394,27 +309,17 @@ document.addEventListener("DOMContentLoaded", () => {
     FLOOR_CORRECTION.setFromEuler(
 
         new THREE.Euler(
-
             -Math.PI / 2,
-
             0,
-
             0,
-
             "XYZ"
-
         )
 
     );
 
 
     /* =====================================================
-       ORIENTATION
-
-       NO ARTIFICIAL 4-FRAME WAIT.
-
-       Orientation is now applied immediately when
-       the target is found.
+       APPLE ORIENTATION
        ===================================================== */
 
     function applyAppleOrientation() {
@@ -427,7 +332,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
         const normal =
-            new THREE.Vector3(0, 0, 1);
+            new THREE.Vector3(
+                0,
+                0,
+                1
+            );
 
 
         normal.applyQuaternion(
@@ -445,16 +354,23 @@ document.addEventListener("DOMContentLoaded", () => {
                 .quaternion
                 .identity();
 
-        } else {
+        }
+        else {
 
             appleOrientation.object3D
                 .quaternion
-                .copy(FLOOR_CORRECTION);
+                .copy(
+                    FLOOR_CORRECTION
+                );
 
         }
 
     }
 
+
+    /* =====================================================
+       BALL ORIENTATION
+       ===================================================== */
 
     function applyBallOrientation() {
 
@@ -466,7 +382,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
         const normal =
-            new THREE.Vector3(0, 0, 1);
+            new THREE.Vector3(
+                0,
+                0,
+                1
+            );
 
 
         normal.applyQuaternion(
@@ -484,11 +404,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 .quaternion
                 .identity();
 
-        } else {
+        }
+        else {
 
             ballOrientation.object3D
                 .quaternion
-                .copy(FLOOR_CORRECTION);
+                .copy(
+                    FLOOR_CORRECTION
+                );
 
         }
 
@@ -499,8 +422,8 @@ document.addEventListener("DOMContentLoaded", () => {
        APPLE FOUND
        
        IMPORTANT:
-       Show Apple immediately.
-       Hide Ball immediately.
+       Apple becomes visible immediately.
+       Ball is hidden immediately.
        ===================================================== */
 
     appleTarget.addEventListener(
@@ -510,7 +433,7 @@ document.addEventListener("DOMContentLoaded", () => {
             activeTarget = 0;
 
 
-            /* Hide the other model FIRST */
+            /* Immediately remove old object */
 
             ball.setAttribute(
                 "visible",
@@ -518,7 +441,7 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-            /* Show Apple immediately */
+            /* Immediately show new object */
 
             apple.setAttribute(
                 "visible",
@@ -526,7 +449,7 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-            /* Apply orientation immediately */
+            /* Immediately orient */
 
             applyAppleOrientation();
 
@@ -545,7 +468,7 @@ document.addEventListener("DOMContentLoaded", () => {
             activeTarget = 1;
 
 
-            /* Hide Apple immediately */
+            /* Immediately remove old object */
 
             apple.setAttribute(
                 "visible",
@@ -553,7 +476,7 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-            /* Show Ball immediately */
+            /* Immediately show new object */
 
             ball.setAttribute(
                 "visible",
@@ -561,7 +484,7 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-            /* Apply orientation immediately */
+            /* Immediately orient */
 
             applyBallOrientation();
 
@@ -571,27 +494,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
     /* =====================================================
        APPLE LOST
-       
-       Only hide Apple if Apple is still the active target.
-
-       This prevents an old targetLost event from accidentally
-       hiding the newly detected Ball.
        ===================================================== */
 
     appleTarget.addEventListener(
         "targetLost",
         () => {
 
-            if (activeTarget === 0) {
+            /*
+               Do NOT allow an old Apple targetLost event
+               to hide the Ball after we already switched.
+            */
 
-                apple.setAttribute(
-                    "visible",
-                    "false"
-                );
+            if (activeTarget !== 0) return;
 
-                activeTarget = null;
 
-            }
+            apple.setAttribute(
+                "visible",
+                "false"
+            );
+
+
+            activeTarget = null;
 
         }
     );
@@ -605,29 +528,34 @@ document.addEventListener("DOMContentLoaded", () => {
         "targetLost",
         () => {
 
-            if (activeTarget === 1) {
+            /*
+               Do NOT allow an old Ball targetLost event
+               to hide the Apple after we already switched.
+            */
 
-                ball.setAttribute(
-                    "visible",
-                    "false"
-                );
+            if (activeTarget !== 1) return;
 
-                activeTarget = null;
 
-            }
+            ball.setAttribute(
+                "visible",
+                "false"
+            );
+
+
+            activeTarget = null;
 
         }
     );
 
 
     /* =====================================================
-       CONTINUOUS ORIENTATION UPDATE
+       TRACKING LOOP
        
-       This does NOT delay target switching.
-       It simply keeps the orientation correct while tracked.
+       No artificial 4-frame delay.
        ===================================================== */
 
     function trackingLoop() {
+
 
         if (activeTarget === 0) {
 
@@ -635,7 +563,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         }
 
-        else if (activeTarget === 1) {
+
+        if (activeTarget === 1) {
 
             applyBallOrientation();
 
@@ -650,124 +579,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     trackingLoop();
-
-
-    /* =====================================================
-       CAMERA VIDEO RECOVERY
-       
-       MindAR creates the camera video dynamically.
-
-       We wait for it to appear, then force only its
-       presentation layer to stay visible.
-       
-       This does NOT replace MindAR's camera.
-       ===================================================== */
-
-    function keepCameraVisible() {
-
-        const videos =
-            document.querySelectorAll("video");
-
-
-        videos.forEach(video => {
-
-            /*
-               Ignore any hypothetical asset videos.
-               The MindAR camera video is normally the
-               video with autoplay / playsinline behavior.
-            */
-
-            if (
-                video.autoplay ||
-                video.playsInline
-            ) {
-
-                video.style.position =
-                    "fixed";
-
-                video.style.top =
-                    "0px";
-
-                video.style.left =
-                    "0px";
-
-                video.style.width =
-                    "100%";
-
-                video.style.height =
-                    "100%";
-
-                video.style.objectFit =
-                    "cover";
-
-                video.style.display =
-                    "block";
-
-                video.style.visibility =
-                    "visible";
-
-                video.style.opacity =
-                    "1";
-
-                video.style.zIndex =
-                    "0";
-
-            }
-
-        });
-
-    }
-
-
-    /*
-       Check repeatedly during startup because MindAR
-       creates the camera video after initialization.
-    */
-
-    let cameraChecks = 0;
-
-
-    const cameraTimer =
-        setInterval(() => {
-
-            keepCameraVisible();
-
-            cameraChecks++;
-
-
-            if (cameraChecks >= 30) {
-
-                clearInterval(
-                    cameraTimer
-                );
-
-            }
-
-        }, 100);
-
-
-    /*
-       Also check whenever MindAR finishes initializing.
-    */
-
-    scene.addEventListener(
-        "mindarImageTrackingInitialized",
-        () => {
-
-            keepCameraVisible();
-
-            setTimeout(
-                keepCameraVisible,
-                100
-            );
-
-            setTimeout(
-                keepCameraVisible,
-                500
-            );
-
-        }
-    );
 
 
     /* =====================================================
@@ -792,9 +603,9 @@ document.addEventListener("DOMContentLoaded", () => {
         BASE_SCALE;
 
 
-    /* -----------------------------------------------------
-       ACTIVE ROTATION OBJECT
-       ----------------------------------------------------- */
+    /* =====================================================
+       GET ACTIVE ROTATION OBJECT
+       ===================================================== */
 
     function getActiveRotationObject() {
 
@@ -817,9 +628,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    /* -----------------------------------------------------
-       ACTIVE MODEL
-       ----------------------------------------------------- */
+    /* =====================================================
+       GET ACTIVE MODEL
+       ===================================================== */
 
     function getActiveModel() {
 
@@ -862,6 +673,10 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
+            /* ---------------------------------------------
+               ONE FINGER
+               --------------------------------------------- */
+
             if (pointers.size === 1) {
 
                 rotating = true;
@@ -877,6 +692,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
             }
 
+
+            /* ---------------------------------------------
+               TWO FINGERS
+               --------------------------------------------- */
 
             if (pointers.size === 2) {
 
@@ -994,7 +813,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
             /* ---------------------------------------------
-               TWO FINGERS = PINCH SCALE
+               TWO FINGERS = SCALE
                --------------------------------------------- */
 
             if (
@@ -1184,6 +1003,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 });
+
 </script>
 
 </body>
