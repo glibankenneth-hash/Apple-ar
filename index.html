@@ -21,17 +21,6 @@ content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable
 
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
-<!-- =========================================================
-     BASIC PAGE STYLE
-     
-     IMPORTANT:
-     NO CUSTOM VIDEO CSS.
-     NO VIDEO Z-INDEX.
-     NO CANVAS Z-INDEX.
-     
-     This keeps MindAR's native camera handling intact.
-     ========================================================= -->
-
 <style>
 
 html,
@@ -62,9 +51,6 @@ canvas {
 
 }
 
-
-/* Hide MindAR UI */
-
 .mindar-ui-loading,
 .mindar-ui-scanning,
 .mindar-ui-error {
@@ -79,15 +65,12 @@ canvas {
 
 <body>
 
-<!-- =========================================================
-     A-FRAME / MINDAR
-     ========================================================= -->
-
 <a-scene
 
 ```
 mindar-image="
     imageTargetSrc: ./targets.mind;
+
     autoStart: true;
 
     uiScanning: no;
@@ -120,10 +103,6 @@ embedded
 
 >
 
-<!-- =========================================================
-     ASSETS
-     ========================================================= -->
-
 <a-assets>
 
 ```
@@ -140,16 +119,12 @@ embedded
 
 </a-assets>
 
-<!-- =========================================================
-     CAMERA
-     ========================================================= -->
-
 <a-camera
  position="0 0 0"
  look-controls="enabled: false"> </a-camera>
 
 <!-- =========================================================
-     APPLE PAGE / TARGET 0
+     APPLE
      ========================================================= -->
 
 <a-entity
@@ -164,19 +139,12 @@ mindar-image-target="targetIndex: 0"
     <a-entity id="appleRotation">
 
         <a-gltf-model
-
             id="apple"
-
             src="#appleModel"
-
             position="0 0 0"
-
             rotation="0 0 0"
-
             scale="4.54545 4.54545 4.54545"
-
             visible="false"
-
         ></a-gltf-model>
 
     </a-entity>
@@ -187,7 +155,7 @@ mindar-image-target="targetIndex: 0"
 </a-entity>
 
 <!-- =========================================================
-     BALL PAGE / TARGET 1
+     BALL
      ========================================================= -->
 
 <a-entity
@@ -202,19 +170,12 @@ mindar-image-target="targetIndex: 1"
     <a-entity id="ballRotation">
 
         <a-gltf-model
-
             id="ball"
-
             src="#ballModel"
-
             position="0 0 0"
-
             rotation="0 0 0"
-
             scale="4.54545 4.54545 4.54545"
-
             visible="false"
-
         ></a-gltf-model>
 
     </a-entity>
@@ -229,7 +190,6 @@ mindar-image-target="targetIndex: 1"
 <script>
 
 document.addEventListener("DOMContentLoaded", () => {
-
 
     const THREE = AFRAME.THREE;
 
@@ -278,7 +238,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* =====================================================
-       ORIGINAL MODEL SCALE
+       BASE SCALE
        ===================================================== */
 
     const BASE_SCALE = 4.54545;
@@ -419,11 +379,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* =====================================================
-       APPLE FOUND
+       TARGET FOUND
        
        IMPORTANT:
-       Apple becomes visible immediately.
-       Ball is hidden immediately.
+       The new object is shown immediately.
+       The old object is hidden immediately.
        ===================================================== */
 
     appleTarget.addEventListener(
@@ -433,7 +393,7 @@ document.addEventListener("DOMContentLoaded", () => {
             activeTarget = 0;
 
 
-            /* Immediately remove old object */
+            /* Hide Ball immediately */
 
             ball.setAttribute(
                 "visible",
@@ -441,7 +401,7 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-            /* Immediately show new object */
+            /* Show Apple immediately */
 
             apple.setAttribute(
                 "visible",
@@ -449,17 +409,13 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-            /* Immediately orient */
+            /* Correct orientation immediately */
 
             applyAppleOrientation();
 
         }
     );
 
-
-    /* =====================================================
-       BALL FOUND
-       ===================================================== */
 
     ballTarget.addEventListener(
         "targetFound",
@@ -468,7 +424,7 @@ document.addEventListener("DOMContentLoaded", () => {
             activeTarget = 1;
 
 
-            /* Immediately remove old object */
+            /* Hide Apple immediately */
 
             apple.setAttribute(
                 "visible",
@@ -476,7 +432,7 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-            /* Immediately show new object */
+            /* Show Ball immediately */
 
             ball.setAttribute(
                 "visible",
@@ -484,7 +440,7 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-            /* Immediately orient */
+            /* Correct orientation immediately */
 
             applyBallOrientation();
 
@@ -493,7 +449,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* =====================================================
-       APPLE LOST
+       TARGET LOST
        ===================================================== */
 
     appleTarget.addEventListener(
@@ -501,8 +457,8 @@ document.addEventListener("DOMContentLoaded", () => {
         () => {
 
             /*
-               Do NOT allow an old Apple targetLost event
-               to hide the Ball after we already switched.
+               Ignore an old Apple lost event if we have
+               already switched to Ball.
             */
 
             if (activeTarget !== 0) return;
@@ -520,17 +476,13 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
-    /* =====================================================
-       BALL LOST
-       ===================================================== */
-
     ballTarget.addEventListener(
         "targetLost",
         () => {
 
             /*
-               Do NOT allow an old Ball targetLost event
-               to hide the Apple after we already switched.
+               Ignore an old Ball lost event if we have
+               already switched to Apple.
             */
 
             if (activeTarget !== 1) return;
@@ -549,13 +501,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* =====================================================
-       TRACKING LOOP
+       CONTINUOUS ORIENTATION
        
-       No artificial 4-frame delay.
+       No 4-frame artificial delay.
        ===================================================== */
 
     function trackingLoop() {
-
 
         if (activeTarget === 0) {
 
@@ -563,8 +514,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         }
 
-
-        if (activeTarget === 1) {
+        else if (activeTarget === 1) {
 
             applyBallOrientation();
 
@@ -582,7 +532,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* =====================================================
-       TOUCH / POINTER CONTROLS
+       POINTER / TOUCH
        ===================================================== */
 
     const pointers =
@@ -604,7 +554,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* =====================================================
-       GET ACTIVE ROTATION OBJECT
+       ACTIVE ROTATION OBJECT
        ===================================================== */
 
     function getActiveRotationObject() {
@@ -629,7 +579,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* =====================================================
-       GET ACTIVE MODEL
+       ACTIVE MODEL
        ===================================================== */
 
     function getActiveModel() {
@@ -673,10 +623,6 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-            /* ---------------------------------------------
-               ONE FINGER
-               --------------------------------------------- */
-
             if (pointers.size === 1) {
 
                 rotating = true;
@@ -692,10 +638,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
             }
 
-
-            /* ---------------------------------------------
-               TWO FINGERS
-               --------------------------------------------- */
 
             if (pointers.size === 2) {
 
@@ -768,9 +710,7 @@ document.addEventListener("DOMContentLoaded", () => {
             );
 
 
-            /* ---------------------------------------------
-               ONE FINGER = ROTATE
-               --------------------------------------------- */
+            /* ONE FINGER = ROTATE */
 
             if (
                 pointers.size === 1 &&
@@ -812,9 +752,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
 
-            /* ---------------------------------------------
-               TWO FINGERS = SCALE
-               --------------------------------------------- */
+            /* TWO FINGERS = PINCH */
 
             if (
                 pointers.size === 2 &&
@@ -960,7 +898,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /* =====================================================
-       PREVENT BROWSER GESTURES
+       PREVENT BROWSER TOUCH GESTURES
        ===================================================== */
 
     scene.addEventListener(
