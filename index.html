@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
 
 <meta charset="UTF-8">
@@ -17,11 +18,6 @@
      ========================================================= -->
 
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-
-
-<!-- =========================================================
-     MINDAR
-     ========================================================= -->
 
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
@@ -60,16 +56,11 @@ canvas {
 }
 
 
-/* =========================================================
-   COMPLETELY HIDE MINDAR UI
-   ========================================================= */
-
 .mindar-ui-scanning,
 .mindar-ui-loading,
 .mindar-ui-error {
 
     display: none !important;
-
 }
 
 </style>
@@ -92,25 +83,16 @@ canvas {
         uiError: no;
 
         /*
-            FAST TARGET SWITCHING
+            FAST TARGET DETECTION
         */
-
         warmupTolerance: 1;
         missTolerance: 1;
 
         /*
-            REDUCED TRACKING DELAY
-
-            Higher filter values make tracking
-            respond faster to camera movement.
+            FAST BUT STILL STABLE TRACKING
         */
-
-        filterMinCF: 0.01;
-        filterBeta: 5000;
-
-        /*
-            Only one page is tracked at a time.
-        */
+        filterMinCF: 0.001;
+        filterBeta: 1000;
 
         maxTrack: 1;
     "
@@ -130,22 +112,17 @@ canvas {
 >
 
 
-
 <!-- =========================================================
      ASSETS
      ========================================================= -->
 
 <a-assets>
 
-    <!-- APPLE -->
-
     <a-asset-item
         id="appleModel"
         src="./Apple.glb">
     </a-asset-item>
 
-
-    <!-- BALL -->
 
     <a-asset-item
         id="ballModel"
@@ -155,135 +132,112 @@ canvas {
 </a-assets>
 
 
-
 <!-- =========================================================
      CAMERA
      ========================================================= -->
 
 <a-camera
-
     position="0 0 0"
-
     look-controls="enabled: false">
-
 </a-camera>
-
 
 
 <!-- =========================================================
      PAGE A
-     TARGET 0
      APPLE
-     
-     PHYSICAL PAGE:
-     21 cm wide
-
-     APPLE:
-     0.076 m = 7.6 cm
-
-     AR SCALE:
-     0.076 / 0.21 = 0.3619
      ========================================================= -->
 
 <a-entity
-
     id="appleTarget"
-
     mindar-image-target="targetIndex: 0"
 >
 
 
-    <a-entity
-        id="appleOrientation"
-    >
+    <!-- Orientation wrapper -->
+    <a-entity id="appleOrientation">
 
 
-        <a-entity
-            id="appleRotation"
-        >
+        <!-- Rotation wrapper -->
+        <a-entity id="appleRotation">
 
 
-            <a-gltf-model
+            <!-- Centering wrapper -->
+            <a-entity id="appleCenter">
 
-                id="apple"
 
-                src="#appleModel"
+                <a-gltf-model
 
-                position="0 0 0"
+                    id="apple"
 
-                rotation="0 0 0"
+                    src="#appleModel"
 
-                scale="0.3619 0.3619 0.3619"
+                    position="0 0 0"
 
-                visible="false"
+                    rotation="0 0 0"
 
-            ></a-gltf-model>
+                    scale="1 1 1"
 
+                    visible="false"
+
+                ></a-gltf-model>
+
+
+            </a-entity>
 
         </a-entity>
 
     </a-entity>
 
 </a-entity>
-
 
 
 <!-- =========================================================
      PAGE B
-     TARGET 1
      BALL
-
-     PHYSICAL PAGE:
-     21 cm wide
-
-     BALL:
-     0.242 m = 24.2 cm
-
-     AR SCALE:
-     0.242 / 0.21 = 1.1524
      ========================================================= -->
 
 <a-entity
-
     id="ballTarget"
-
     mindar-image-target="targetIndex: 1"
 >
 
 
-    <a-entity
-        id="ballOrientation"
-    >
+    <!-- Orientation wrapper -->
+    <a-entity id="ballOrientation">
 
 
-        <a-entity
-            id="ballRotation"
-        >
+        <!-- Rotation wrapper -->
+        <a-entity id="ballRotation">
 
 
-            <a-gltf-model
+            <!-- Centering wrapper -->
+            <a-entity id="ballCenter">
 
-                id="ball"
 
-                src="#ballModel"
+                <a-gltf-model
 
-                position="0 0 0"
+                    id="ball"
 
-                rotation="0 0 0"
+                    src="#ballModel"
 
-                scale="1.1524 1.1524 1.1524"
+                    position="0 0 0"
 
-                visible="false"
+                    rotation="0 0 0"
 
-            ></a-gltf-model>
+                    scale="1 1 1"
 
+                    visible="false"
+
+                ></a-gltf-model>
+
+
+            </a-entity>
 
         </a-entity>
 
     </a-entity>
 
 </a-entity>
-
 
 
 </a-scene>
@@ -293,1191 +247,1212 @@ canvas {
 <script>
 
 
-document.addEventListener(
-    "DOMContentLoaded",
-    function () {
+document.addEventListener("DOMContentLoaded", function () {
 
 
-        /* =====================================================
-           THREE
-           ===================================================== */
+    const THREE = AFRAME.THREE;
 
-        const THREE =
-            AFRAME.THREE;
+    const scene = document.querySelector("a-scene");
 
 
+    /* =========================================================
+       TARGETS
+       ========================================================= */
 
-        /* =====================================================
-           SCENE
-           ===================================================== */
+    const appleTarget =
+        document.querySelector("#appleTarget");
 
-        const scene =
-            document.querySelector(
-                "a-scene"
-            );
+    const ballTarget =
+        document.querySelector("#ballTarget");
 
 
+    /* =========================================================
+       MODELS
+       ========================================================= */
 
-        /* =====================================================
-           APPLE ELEMENTS
-           ===================================================== */
+    const apple =
+        document.querySelector("#apple");
 
-        const appleTarget =
-            document.querySelector(
-                "#appleTarget"
-            );
+    const ball =
+        document.querySelector("#ball");
 
 
-        const appleOrientation =
-            document.querySelector(
-                "#appleOrientation"
-            );
+    /* =========================================================
+       WRAPPERS
+       ========================================================= */
 
+    const appleOrientation =
+        document.querySelector("#appleOrientation");
 
-        const appleRotation =
-            document.querySelector(
-                "#appleRotation"
-            );
+    const appleRotation =
+        document.querySelector("#appleRotation");
 
+    const appleCenter =
+        document.querySelector("#appleCenter");
 
-        const apple =
-            document.querySelector(
-                "#apple"
-            );
 
+    const ballOrientation =
+        document.querySelector("#ballOrientation");
 
+    const ballRotation =
+        document.querySelector("#ballRotation");
 
-        /* =====================================================
-           BALL ELEMENTS
-           ===================================================== */
+    const ballCenter =
+        document.querySelector("#ballCenter");
 
-        const ballTarget =
-            document.querySelector(
-                "#ballTarget"
-            );
 
+    /* =========================================================
+       REAL WORLD PAGE SIZE
+       =========================================================
 
-        const ballOrientation =
-            document.querySelector(
-                "#ballOrientation"
-            );
+       CHILDREN'S BOOK PAGE:
 
+       22 cm × 22 cm
 
-        const ballRotation =
-            document.querySelector(
-                "#ballRotation"
-            );
+       22 cm = 0.22 meter
 
+       MindAR target width = 1 scene unit
 
-        const ball =
-            document.querySelector(
-                "#ball"
-            );
+       Therefore:
 
+       1 target unit = 22 cm in the real world.
+    */
 
+    const PAGE_WIDTH_METERS = 0.22;
 
-        /* =====================================================
-           REAL-WORLD BASE SCALE
-           =====================================================
 
-           Physical target width:
-           0.21 meters
+    /* =========================================================
+       DESIRED REAL WORLD MODEL SIZES
+       ========================================================= */
 
-           Apple:
-           0.076 meters
+    const APPLE_REAL_SIZE_METERS = 0.076;
 
-           Ball:
-           0.242 meters
-        */
+    const BALL_REAL_SIZE_METERS = 0.241;
 
-        const APPLE_BASE_SCALE =
-            0.3619;
 
+    /* =========================================================
+       ROTATION SPEED
+       ========================================================= */
 
-        const BALL_BASE_SCALE =
-            1.1524;
+    const ROTATION_SPEED = 0.010;
 
 
+    /* =========================================================
+       TRACKING STATE
+       ========================================================= */
 
-        /* =====================================================
-           ACTIVE TARGET
-           
-           -1 = nothing
-            0 = Apple
-            1 = Ball
-        */
+    let activeTarget = -1;
 
-        let activeTarget =
-            -1;
 
+    let appleTracked = false;
+    let ballTracked = false;
 
 
-        /* =====================================================
-           TRACKING STABILITY
-           ===================================================== */
+    /* =========================================================
+       STABLE TRACKING
+       ========================================================= */
 
-        const REQUIRED_STABLE_FRAMES =
-            2;
+    const REQUIRED_STABLE_FRAMES = 2;
 
 
+    let appleStableFrames = 0;
+    let ballStableFrames = 0;
 
-        /* =====================================================
-           APPLE TRACKING STATE
-           ===================================================== */
 
-        let appleTracked =
-            false;
+    let appleStableTracking = false;
+    let ballStableTracking = false;
 
 
-        let applePoseLocked =
-            true;
+    let applePoseLocked = true;
+    let ballPoseLocked = true;
 
 
-        let appleStableTracking =
-            false;
+    /* =========================================================
+       ORIENTATION MODES
+       ========================================================= */
 
+    let appleCurrentMode = "vertical";
+    let applePendingMode = "vertical";
+    let appleModeConfirmFrames = 0;
 
-        let appleStableFrames =
-            0;
 
+    let ballCurrentMode = "vertical";
+    let ballPendingMode = "vertical";
+    let ballModeConfirmFrames = 0;
 
 
-        /* =====================================================
-           APPLE ORIENTATION STATE
-           ===================================================== */
+    const MODE_CONFIRM_FRAMES = 5;
 
-        let appleCurrentMode =
-            "vertical";
 
+    /* =========================================================
+       FLOOR ROTATION
+       ========================================================= */
 
-        let applePendingMode =
-            "vertical";
+    const FLOOR_CORRECTION =
+        new THREE.Quaternion().setFromEuler(
 
+            new THREE.Euler(
 
-        let appleModeConfirmFrames =
-            0;
-
-
-        const FLOOR_CORRECTION =
-            new THREE.Quaternion().setFromEuler(
-
-                new THREE.Euler(
-                    -Math.PI / 2,
-                    0,
-                    0,
-                    "XYZ"
-                )
-
-            );
-
-
-        const worldUp =
-            new THREE.Vector3(
-                0,
-                1,
-                0
-            );
-
-
-        const targetNormal =
-            new THREE.Vector3(
+                -Math.PI / 2,
                 0,
                 0,
-                1
-            );
+                "XYZ"
+
+            )
+
+        );
 
 
-        const worldNormal =
+    /* =========================================================
+       DIRECTION VECTORS
+       ========================================================= */
+
+    const worldUp =
+        new THREE.Vector3(0, 1, 0);
+
+
+    const targetNormal =
+        new THREE.Vector3(0, 0, 1);
+
+
+    const worldNormal =
+        new THREE.Vector3();
+
+
+    const targetQuaternion =
+        new THREE.Quaternion();
+
+
+
+    /* =========================================================
+       USER ROTATION
+       ========================================================= */
+
+    let appleRotationX = 0;
+    let appleRotationY = 0;
+
+
+    let ballRotationX = 0;
+    let ballRotationY = 0;
+
+
+
+    function applyAppleRotation() {
+
+        appleRotation.object3D.rotation.x =
+            appleRotationX;
+
+        appleRotation.object3D.rotation.y =
+            appleRotationY;
+
+        appleRotation.object3D.rotation.z = 0;
+
+    }
+
+
+
+    function applyBallRotation() {
+
+        ballRotation.object3D.rotation.x =
+            ballRotationX;
+
+        ballRotation.object3D.rotation.y =
+            ballRotationY;
+
+        ballRotation.object3D.rotation.z = 0;
+
+    }
+
+
+
+    function rotateApple(deltaX, deltaY) {
+
+        appleRotationY +=
+            deltaX * ROTATION_SPEED;
+
+
+        appleRotationX +=
+            deltaY * ROTATION_SPEED;
+
+
+        appleRotationX =
+            THREE.MathUtils.euclideanModulo(
+
+                appleRotationX + Math.PI,
+
+                Math.PI * 2
+
+            ) - Math.PI;
+
+
+        appleRotationY =
+            THREE.MathUtils.euclideanModulo(
+
+                appleRotationY + Math.PI,
+
+                Math.PI * 2
+
+            ) - Math.PI;
+
+
+        applyAppleRotation();
+
+    }
+
+
+
+    function rotateBall(deltaX, deltaY) {
+
+        ballRotationY +=
+            deltaX * ROTATION_SPEED;
+
+
+        ballRotationX +=
+            deltaY * ROTATION_SPEED;
+
+
+        ballRotationX =
+            THREE.MathUtils.euclideanModulo(
+
+                ballRotationX + Math.PI,
+
+                Math.PI * 2
+
+            ) - Math.PI;
+
+
+        ballRotationY =
+            THREE.MathUtils.euclideanModulo(
+
+                ballRotationY + Math.PI,
+
+                Math.PI * 2
+
+            ) - Math.PI;
+
+
+        applyBallRotation();
+
+    }
+
+
+
+    /* =========================================================
+       MODEL SIZE CALIBRATION
+       =========================================================
+
+       This is important.
+
+       The target image is 22 cm wide.
+
+       MindAR treats the target width as 1 scene unit.
+
+       Therefore:
+
+       7.6 cm Apple
+       =
+       0.076 / 0.22
+       =
+       0.34545 target units
+
+
+       24.1 cm Ball
+       =
+       0.241 / 0.22
+       =
+       1.09545 target units
+
+
+       We then measure the actual imported GLB and
+       automatically calculate its required scale.
+
+       This avoids assuming that the GLB was exported
+       at exactly 1 scene unit.
+    */
+
+
+    function calibrateModel(
+
+        modelElement,
+        desiredMeters
+
+    ) {
+
+        if (!modelElement.object3D) return;
+
+
+        const model =
+            modelElement.object3D;
+
+
+        /* Reset scale first */
+
+        model.scale.set(1, 1, 1);
+
+
+        model.updateMatrixWorld(true);
+
+
+        const box =
+            new THREE.Box3();
+
+
+        box.setFromObject(model);
+
+
+        const size =
             new THREE.Vector3();
 
 
-        const targetQuaternion =
-            new THREE.Quaternion();
+        box.getSize(size);
 
 
+        const nativeSize =
+            Math.max(
 
-        /* =====================================================
-           BALL TRACKING STATE
-           ===================================================== */
+                size.x,
+                size.y,
+                size.z
 
-        let ballTracked =
-            false;
-
-
-        let ballPoseLocked =
-            true;
+            );
 
 
-        let ballStableTracking =
-            false;
+        if (
 
+            !isFinite(nativeSize) ||
+            nativeSize <= 0
 
-        let ballStableFrames =
-            0;
-
-
-
-        /* =====================================================
-           BALL ORIENTATION STATE
-           ===================================================== */
-
-        let ballCurrentMode =
-            "vertical";
-
-
-        let ballPendingMode =
-            "vertical";
-
-
-        let ballModeConfirmFrames =
-            0;
-
-
-
-        /* =====================================================
-           USER ROTATION
-           ===================================================== */
-
-        let appleRotationX =
-            0;
-
-
-        let appleRotationY =
-            0;
-
-
-        let ballRotationX =
-            0;
-
-
-        let ballRotationY =
-            0;
-
-
-        const ROTATION_SPEED =
-            0.010;
-
-
-
-        /* =====================================================
-           APPLY APPLE USER ROTATION
-           ===================================================== */
-
-        function applyAppleRotation() {
-
-            appleRotation
-                .object3D
-                .rotation
-                .x =
-                appleRotationX;
-
-
-            appleRotation
-                .object3D
-                .rotation
-                .y =
-                appleRotationY;
-
-
-            appleRotation
-                .object3D
-                .rotation
-                .z =
-                0;
-
-        }
-
-
-
-        /* =====================================================
-           APPLY BALL USER ROTATION
-           ===================================================== */
-
-        function applyBallRotation() {
-
-            ballRotation
-                .object3D
-                .rotation
-                .x =
-                ballRotationX;
-
-
-            ballRotation
-                .object3D
-                .rotation
-                .y =
-                ballRotationY;
-
-
-            ballRotation
-                .object3D
-                .rotation
-                .z =
-                0;
-
-        }
-
-
-
-        /* =====================================================
-           ROTATE APPLE
-           ===================================================== */
-
-        function rotateApple(
-            deltaX,
-            deltaY
         ) {
 
-            appleRotationY +=
-                deltaX *
-                ROTATION_SPEED;
+            console.warn(
+                "Could not determine model size."
+            );
 
-
-            appleRotationX +=
-                deltaY *
-                ROTATION_SPEED;
-
-
-            appleRotationX =
-                THREE.MathUtils.euclideanModulo(
-                    appleRotationX +
-                    Math.PI,
-                    Math.PI * 2
-                ) -
-                Math.PI;
-
-
-            appleRotationY =
-                THREE.MathUtils.euclideanModulo(
-                    appleRotationY +
-                    Math.PI,
-                    Math.PI * 2
-                ) -
-                Math.PI;
-
-
-            applyAppleRotation();
+            return;
 
         }
 
 
+        /*
+            Desired size in MindAR target units.
+        */
 
-        /* =====================================================
-           ROTATE BALL
-           ===================================================== */
-
-        function rotateBall(
-            deltaX,
-            deltaY
-        ) {
-
-            ballRotationY +=
-                deltaX *
-                ROTATION_SPEED;
+        const desiredTargetSize =
+            desiredMeters /
+            PAGE_WIDTH_METERS;
 
 
-            ballRotationX +=
-                deltaY *
-                ROTATION_SPEED;
+        /*
+            Required GLB scale.
+        */
+
+        const finalScale =
+            desiredTargetSize /
+            nativeSize;
 
 
-            ballRotationX =
-                THREE.MathUtils.euclideanModulo(
-                    ballRotationX +
-                    Math.PI,
-                    Math.PI * 2
-                ) -
-                Math.PI;
+        model.scale.set(
+
+            finalScale,
+            finalScale,
+            finalScale
+
+        );
 
 
-            ballRotationY =
-                THREE.MathUtils.euclideanModulo(
-                    ballRotationY +
-                    Math.PI,
-                    Math.PI * 2
-                ) -
-                Math.PI;
+        model.updateMatrixWorld(true);
 
 
-            applyBallRotation();
+        console.log(
+            "Model calibrated:",
+            desiredMeters * 100,
+            "cm",
+            "Native size:",
+            nativeSize,
+            "Target size:",
+            desiredTargetSize,
+            "Final scale:",
+            finalScale
+        );
 
-        }
-
-
-
-        /* =====================================================
-           POINTERS
-           ===================================================== */
-
-        const pointers =
-            new Map();
-
-
-        let rotationPointerId =
-            null;
-
-
-        let previousX =
-            0;
-
-
-        let previousY =
-            0;
-
-
-        let isRotating =
-            false;
-
-
-        let pinchStartDistance =
-            null;
-
-
-        let pinchStartScale =
-            1;
-
-
-        let pinchObject =
-            null;
+    }
 
 
 
-        /* =====================================================
-           GET PINCH DISTANCE
-           ===================================================== */
+    /* =========================================================
+       CENTER MODEL
+       =========================================================
 
-        function getPinchDistance() {
+       This keeps rotation around the visual center
+       instead of the GLB's original origin.
+    */
 
-            if (
-                pointers.size !== 2
-            ) {
+    function centerModel(modelElement, centerElement) {
 
-                return null;
-
-            }
-
-
-            const values =
-                Array.from(
-                    pointers.values()
-                );
+        const model =
+            modelElement.object3D;
 
 
-            const a =
-                values[0];
+        model.updateMatrixWorld(true);
 
 
-            const b =
-                values[1];
+        const box =
+            new THREE.Box3();
 
 
-            const dx =
-                a.x -
-                b.x;
+        box.setFromObject(model);
 
 
-            const dy =
-                a.y -
-                b.y;
+        const center =
+            new THREE.Vector3();
 
 
-            return Math.sqrt(
-                dx * dx +
-                dy * dy
+        box.getCenter(center);
+
+
+        /*
+            Move the model so its visual center
+            is at the wrapper origin.
+        */
+
+        model.position.x -= center.x;
+
+        model.position.y -= center.y;
+
+        model.position.z -= center.z;
+
+
+        model.updateMatrixWorld(true);
+
+    }
+
+
+
+    /* =========================================================
+       PREPARE APPLE
+       ========================================================= */
+
+    apple.addEventListener(
+
+        "model-loaded",
+
+        function () {
+
+            calibrateModel(
+
+                apple,
+                APPLE_REAL_SIZE_METERS
+
+            );
+
+
+            centerModel(
+
+                apple,
+                appleCenter
+
+            );
+
+
+            apple.setAttribute(
+                "visible",
+                false
             );
 
         }
 
+    );
 
 
-        /* =====================================================
-           RESET POINTER STATE
-           ===================================================== */
 
-        function resetPointerState() {
+    /* =========================================================
+       PREPARE BALL
+       ========================================================= */
 
-            pointers.clear();
+    ball.addEventListener(
+
+        "model-loaded",
+
+        function () {
+
+            calibrateModel(
+
+                ball,
+                BALL_REAL_SIZE_METERS
+
+            );
+
+
+            centerModel(
+
+                ball,
+                ballCenter
+
+            );
+
+
+            ball.setAttribute(
+                "visible",
+                false
+            );
+
+        }
+
+    );
+
+
+
+    /* =========================================================
+       PINCH / TOUCH
+       ========================================================= */
+
+    const pointers = new Map();
+
+
+    let rotationPointerId = null;
+
+
+    let previousX = 0;
+    let previousY = 0;
+
+
+    let isRotating = false;
+
+
+    let pinchStartDistance = null;
+
+    let pinchStartScale = 1;
+
+    let pinchObject = null;
+
+
+
+    function getPinchDistance() {
+
+        if (pointers.size !== 2) {
+
+            return null;
+
+        }
+
+
+        const values =
+            Array.from(
+                pointers.values()
+            );
+
+
+        const a = values[0];
+        const b = values[1];
+
+
+        const dx =
+            a.x - b.x;
+
+
+        const dy =
+            a.y - b.y;
+
+
+        return Math.sqrt(
+
+            dx * dx +
+            dy * dy
+
+        );
+
+    }
+
+
+
+    function resetPointerState() {
+
+        pointers.clear();
+
+        rotationPointerId = null;
+
+        isRotating = false;
+
+        pinchStartDistance = null;
+
+        pinchObject = null;
+
+    }
+
+
+
+    function updatePinch() {
+
+        const distance =
+            getPinchDistance();
+
+
+        if (distance === null) {
+
+            pinchStartDistance = null;
+
+            pinchObject = null;
+
+            return;
+
+        }
+
+
+        let object = null;
+
+
+        if (activeTarget === 0) {
+
+            object = apple;
+
+        }
+
+        else if (activeTarget === 1) {
+
+            object = ball;
+
+        }
+
+
+        if (!object) return;
+
+
+
+        if (pinchStartDistance === null) {
+
+            pinchStartDistance = distance;
+
+            pinchStartScale =
+                object.object3D.scale.x;
+
+            pinchObject = object;
+
+            return;
+
+        }
+
+
+        let scale =
+
+            pinchStartScale *
+            (distance / pinchStartDistance);
+
+
+        const minimum =
+            pinchStartScale * 0.25;
+
+
+        const maximum =
+            pinchStartScale * 4.0;
+
+
+        scale =
+            THREE.MathUtils.clamp(
+
+                scale,
+                minimum,
+                maximum
+
+            );
+
+
+        object.object3D.scale.set(
+
+            scale,
+            scale,
+            scale
+
+        );
+
+    }
+
+
+
+    function pointerDown(event) {
+
+        if (activeTarget === -1) return;
+
+
+        pointers.set(
+
+            event.pointerId,
+
+            {
+
+                x: event.clientX,
+                y: event.clientY
+
+            }
+
+        );
+
+
+        if (pointers.size === 1) {
 
             rotationPointerId =
-                null;
+                event.pointerId;
 
-            isRotating =
-                false;
 
-            pinchStartDistance =
-                null;
+            previousX =
+                event.clientX;
 
-            pinchObject =
-                null;
+
+            previousY =
+                event.clientY;
+
+
+            isRotating = true;
+
+        }
+
+        else {
+
+            isRotating = false;
+
+            rotationPointerId = null;
+
+            pinchStartDistance = null;
 
         }
 
 
+        try {
 
-        /* =====================================================
-           PINCH ZOOM
-           ===================================================== */
+            event.target.setPointerCapture(
 
-        function updatePinch() {
+                event.pointerId
 
-            const distance =
-                getPinchDistance();
-
-
-            if (
-                distance === null
-            ) {
-
-                pinchStartDistance =
-                    null;
-
-                pinchObject =
-                    null;
-
-                return;
-
-            }
-
-
-            let object =
-                null;
-
-
-            if (
-                activeTarget === 0
-            ) {
-
-                object =
-                    apple;
-
-            }
-            else if (
-                activeTarget === 1
-            ) {
-
-                object =
-                    ball;
-
-            }
-
-
-            if (!object) {
-                return;
-            }
-
-
-            if (
-                pinchStartDistance ===
-                null
-            ) {
-
-                pinchStartDistance =
-                    distance;
-
-
-                pinchStartScale =
-                    object
-                        .object3D
-                        .scale
-                        .x;
-
-
-                pinchObject =
-                    object;
-
-
-                return;
-
-            }
-
-
-            let scale =
-                pinchStartScale *
-                (
-                    distance /
-                    pinchStartDistance
-                );
-
-
-            /*
-                Pinch range is relative to
-                the correct real-world size.
-            */
-
-            const baseScale =
-                pinchObject === apple
-                    ? APPLE_BASE_SCALE
-                    : BALL_BASE_SCALE;
-
-
-            const minScale =
-                baseScale *
-                0.3;
-
-
-            const maxScale =
-                baseScale *
-                3.0;
-
-
-            scale =
-                THREE.MathUtils.clamp(
-                    scale,
-                    minScale,
-                    maxScale
-                );
-
-
-            object.object3D.scale.set(
-                scale,
-                scale,
-                scale
             );
 
         }
 
+        catch (error) {}
 
 
-        /* =====================================================
-           POINTER DOWN
-           ===================================================== */
+        event.preventDefault();
 
-        function pointerDown(
-            event
+    }
+
+
+
+    function pointerMove(event) {
+
+        if (activeTarget === -1)
+            return;
+
+
+        if (!pointers.has(event.pointerId))
+            return;
+
+
+        pointers.set(
+
+            event.pointerId,
+
+            {
+
+                x: event.clientX,
+                y: event.clientY
+
+            }
+
+        );
+
+
+        /*
+            ONE FINGER = ROTATE
+        */
+
+        if (
+
+            pointers.size === 1 &&
+            isRotating &&
+            rotationPointerId === event.pointerId
+
         ) {
 
-            if (
-                activeTarget === -1
-            ) {
-                return;
-            }
+            const deltaX =
+                event.clientX - previousX;
 
 
-            pointers.set(
-
-                event.pointerId,
-
-                {
-                    x:
-                        event.clientX,
-
-                    y:
-                        event.clientY
-                }
-
-            );
+            const deltaY =
+                event.clientY - previousY;
 
 
-            if (
-                pointers.size === 1
-            ) {
+            if (activeTarget === 0) {
 
-                rotationPointerId =
-                    event.pointerId;
-
-
-                previousX =
-                    event.clientX;
-
-
-                previousY =
-                    event.clientY;
-
-
-                isRotating =
-                    true;
-
-            }
-            else {
-
-                isRotating =
-                    false;
-
-
-                rotationPointerId =
-                    null;
-
-
-                pinchStartDistance =
-                    null;
-
-            }
-
-
-            try {
-
-                event.target.setPointerCapture(
-                    event.pointerId
+                rotateApple(
+                    deltaX,
+                    deltaY
                 );
 
             }
-            catch (error) {}
+
+            else if (activeTarget === 1) {
+
+                rotateBall(
+                    deltaX,
+                    deltaY
+                );
+
+            }
 
 
-            event.preventDefault();
+            previousX =
+                event.clientX;
+
+
+            previousY =
+                event.clientY;
 
         }
 
 
+        /*
+            TWO FINGERS = SCALE
+        */
 
-        /* =====================================================
-           POINTER MOVE
-           ===================================================== */
+        else if (pointers.size === 2) {
 
-        function pointerMove(
-            event
+            isRotating = false;
+
+            updatePinch();
+
+        }
+
+
+        event.preventDefault();
+
+    }
+
+
+
+    function pointerUp(event) {
+
+        pointers.delete(
+            event.pointerId
+        );
+
+
+        if (
+
+            rotationPointerId ===
+            event.pointerId
+
         ) {
 
-            if (
-                activeTarget === -1
-            ) {
-                return;
-            }
+            rotationPointerId = null;
 
-
-            if (
-                !pointers.has(
-                    event.pointerId
-                )
-            ) {
-                return;
-            }
-
-
-            pointers.set(
-
-                event.pointerId,
-
-                {
-                    x:
-                        event.clientX,
-
-                    y:
-                        event.clientY
-                }
-
-            );
-
-
-            /* -------------------------------------------------
-               ONE FINGER = ROTATION
-               ------------------------------------------------- */
-
-            if (
-
-                pointers.size === 1 &&
-
-                isRotating &&
-
-                rotationPointerId ===
-                event.pointerId
-
-            ) {
-
-
-                const deltaX =
-                    event.clientX -
-                    previousX;
-
-
-                const deltaY =
-                    event.clientY -
-                    previousY;
-
-
-                if (
-                    activeTarget === 0
-                ) {
-
-                    rotateApple(
-                        deltaX,
-                        deltaY
-                    );
-
-                }
-                else if (
-                    activeTarget === 1
-                ) {
-
-                    rotateBall(
-                        deltaX,
-                        deltaY
-                    );
-
-                }
-
-
-                previousX =
-                    event.clientX;
-
-
-                previousY =
-                    event.clientY;
-
-            }
-
-
-            /* -------------------------------------------------
-               TWO FINGERS = PINCH
-               ------------------------------------------------- */
-
-            else if (
-                pointers.size === 2
-            ) {
-
-                isRotating =
-                    false;
-
-
-                updatePinch();
-
-            }
-
-
-            event.preventDefault();
+            isRotating = false;
 
         }
 
 
+        if (pointers.size < 2) {
 
-        /* =====================================================
-           POINTER UP
-           ===================================================== */
+            pinchStartDistance = null;
 
-        function pointerUp(
-            event
+            pinchObject = null;
+
+        }
+
+
+        event.preventDefault();
+
+    }
+
+
+
+    function pointerCancel(event) {
+
+        pointers.delete(
+            event.pointerId
+        );
+
+
+        if (
+
+            rotationPointerId ===
+            event.pointerId
+
         ) {
 
-            pointers.delete(
-                event.pointerId
-            );
+            rotationPointerId = null;
 
-
-            if (
-                rotationPointerId ===
-                event.pointerId
-            ) {
-
-                rotationPointerId =
-                    null;
-
-                isRotating =
-                    false;
-
-            }
-
-
-            if (
-                pointers.size < 2
-            ) {
-
-                pinchStartDistance =
-                    null;
-
-                pinchObject =
-                    null;
-
-            }
-
-
-            event.preventDefault();
+            isRotating = false;
 
         }
 
 
+        if (pointers.size < 2) {
 
-        /* =====================================================
-           POINTER CANCEL
-           ===================================================== */
+            pinchStartDistance = null;
 
-        function pointerCancel(
-            event
-        ) {
-
-            pointers.delete(
-                event.pointerId
-            );
-
-
-            if (
-                rotationPointerId ===
-                event.pointerId
-            ) {
-
-                rotationPointerId =
-                    null;
-
-                isRotating =
-                    false;
-
-            }
-
-
-            if (
-                pointers.size < 2
-            ) {
-
-                pinchStartDistance =
-                    null;
-
-                pinchObject =
-                    null;
-
-            }
+            pinchObject = null;
 
         }
 
+    }
 
 
-        /* =====================================================
-           APPLE TARGET MODE
-           ===================================================== */
 
-        function detectAppleMode() {
+    /* =========================================================
+       APPLE FLOOR / VERTICAL DETECTION
+       ========================================================= */
 
-            if (
-                !appleTracked ||
-                applePoseLocked
-            ) {
-                return null;
-            }
+    function detectAppleMode() {
+
+        if (!appleTracked)
+            return null;
 
 
-            appleTarget.object3D.getWorldQuaternion(
+        appleTarget.object3D.getWorldQuaternion(
+
+            targetQuaternion
+
+        );
+
+
+        worldNormal
+
+            .copy(targetNormal)
+
+            .applyQuaternion(
                 targetQuaternion
+            )
+
+            .normalize();
+
+
+        const verticalDot =
+
+            Math.abs(
+
+                worldNormal.dot(worldUp)
+
             );
 
 
-            worldNormal
-                .copy(targetNormal)
-                .applyQuaternion(
-                    targetQuaternion
-                )
-                .normalize();
+        if (verticalDot > 0.70)
+
+            return "floor";
 
 
-            const verticalDot =
-                Math.abs(
-                    worldNormal.dot(
-                        worldUp
-                    )
-                );
+        if (verticalDot < 0.20)
+
+            return "vertical";
 
 
-            if (
-                verticalDot > 0.70
-            ) {
+        return appleCurrentMode;
 
-                return "floor";
-
-            }
-
-
-            if (
-                verticalDot < 0.20
-            ) {
-
-                return "vertical";
-
-            }
-
-
-            return appleCurrentMode;
-
-        }
+    }
 
 
 
-        /* =====================================================
-           BALL TARGET MODE
-           ===================================================== */
+    /* =========================================================
+       BALL FLOOR / VERTICAL DETECTION
+       ========================================================= */
 
-        function detectBallMode() {
+    function detectBallMode() {
 
-            if (
-                !ballTracked ||
-                ballPoseLocked
-            ) {
-                return null;
-            }
+        if (!ballTracked)
+            return null;
 
 
-            ballTarget.object3D.getWorldQuaternion(
+        ballTarget.object3D.getWorldQuaternion(
+
+            targetQuaternion
+
+        );
+
+
+        worldNormal
+
+            .copy(targetNormal)
+
+            .applyQuaternion(
                 targetQuaternion
+            )
+
+            .normalize();
+
+
+        const verticalDot =
+
+            Math.abs(
+
+                worldNormal.dot(worldUp)
+
             );
 
 
-            worldNormal
-                .copy(targetNormal)
-                .applyQuaternion(
-                    targetQuaternion
-                )
-                .normalize();
+        if (verticalDot > 0.70)
+
+            return "floor";
 
 
-            const verticalDot =
-                Math.abs(
-                    worldNormal.dot(
-                        worldUp
-                    )
+        if (verticalDot < 0.20)
+
+            return "vertical";
+
+
+        return ballCurrentMode;
+
+    }
+
+
+
+    /* =========================================================
+       APPLE ORIENTATION
+       ========================================================= */
+
+    function applyAppleTargetOrientation() {
+
+        if (
+
+            !appleTracked ||
+            !appleStableTracking
+
+        ) {
+
+            return;
+
+        }
+
+
+        if (
+
+            appleCurrentMode === "floor"
+
+        ) {
+
+            appleOrientation
+                .object3D
+                .quaternion
+                .copy(
+                    FLOOR_CORRECTION
                 );
 
+        }
 
-            if (
-                verticalDot > 0.70
-            ) {
+        else {
 
-                return "floor";
+            appleOrientation
+                .object3D
+                .quaternion
+                .identity();
 
-            }
+        }
 
-
-            if (
-                verticalDot < 0.20
-            ) {
-
-                return "vertical";
-
-            }
+    }
 
 
-            return ballCurrentMode;
+
+    /* =========================================================
+       BALL ORIENTATION
+       ========================================================= */
+
+    function applyBallTargetOrientation() {
+
+        if (
+
+            !ballTracked ||
+            !ballStableTracking
+
+        ) {
+
+            return;
 
         }
 
 
+        if (
 
-        /* =====================================================
-           APPLY APPLE TARGET ORIENTATION
-           ===================================================== */
+            ballCurrentMode === "floor"
 
-        function applyAppleTargetOrientation() {
+        ) {
 
-            if (
-                !appleTracked ||
-                applePoseLocked ||
-                !appleStableTracking
-            ) {
-                return;
-            }
+            ballOrientation
+                .object3D
+                .quaternion
+                .copy(
+                    FLOOR_CORRECTION
+                );
+
+        }
+
+        else {
+
+            ballOrientation
+                .object3D
+                .quaternion
+                .identity();
+
+        }
+
+    }
 
 
-            if (
-                appleCurrentMode ===
-                "floor"
-            ) {
 
-                appleOrientation
-                    .object3D
-                    .quaternion
-                    .copy(
-                        FLOOR_CORRECTION
-                    );
+    /* =========================================================
+       UPDATE APPLE MODE
+       ========================================================= */
 
-            }
-            else {
+    function updateAppleMode() {
 
-                appleOrientation
-                    .object3D
-                    .quaternion
-                    .identity();
+        if (
 
-            }
+            !appleTracked ||
+            !appleStableTracking
+
+        ) {
+
+            return;
 
         }
 
 
-
-        /* =====================================================
-           APPLY BALL TARGET ORIENTATION
-           ===================================================== */
-
-        function applyBallTargetOrientation() {
-
-            if (
-                !ballTracked ||
-                ballPoseLocked ||
-                !ballStableTracking
-            ) {
-                return;
-            }
+        const detected =
+            detectAppleMode();
 
 
-            if (
-                ballCurrentMode ===
-                "floor"
-            ) {
+        if (detected === null)
+            return;
 
-                ballOrientation
-                    .object3D
-                    .quaternion
-                    .copy(
-                        FLOOR_CORRECTION
-                    );
 
-            }
-            else {
+        if (
 
-                ballOrientation
-                    .object3D
-                    .quaternion
-                    .identity();
+            detected !==
+            applePendingMode
 
-            }
+        ) {
+
+            applePendingMode =
+                detected;
+
+
+            appleModeConfirmFrames = 0;
+
+            return;
 
         }
 
 
-
-        /* =====================================================
-           APPLE MODE UPDATE
-           ===================================================== */
-
-        function updateAppleMode() {
-
-            if (
-                !appleTracked ||
-                applePoseLocked ||
-                !appleStableTracking
-            ) {
-                return;
-            }
+        appleModeConfirmFrames++;
 
 
-            const detected =
-                detectAppleMode();
+        if (
 
+            appleModeConfirmFrames >=
+            MODE_CONFIRM_FRAMES
+
+        ) {
 
             if (
-                detected === null
-            ) {
-                return;
-            }
 
-
-            if (
-                detected !==
-                applePendingMode
-            ) {
-
-                applePendingMode =
-                    detected;
-
-                appleModeConfirmFrames =
-                    0;
-
-                return;
-
-            }
-
-
-            appleModeConfirmFrames++;
-
-
-            if (
-                appleModeConfirmFrames >= 6 &&
                 appleCurrentMode !==
                 applePendingMode
+
             ) {
 
                 appleCurrentMode =
@@ -1487,57 +1462,69 @@ document.addEventListener(
 
         }
 
+    }
 
 
-        /* =====================================================
-           BALL MODE UPDATE
-           ===================================================== */
 
-        function updateBallMode() {
+    /* =========================================================
+       UPDATE BALL MODE
+       ========================================================= */
+
+    function updateBallMode() {
+
+        if (
+
+            !ballTracked ||
+            !ballStableTracking
+
+        ) {
+
+            return;
+
+        }
+
+
+        const detected =
+            detectBallMode();
+
+
+        if (detected === null)
+            return;
+
+
+        if (
+
+            detected !==
+            ballPendingMode
+
+        ) {
+
+            ballPendingMode =
+                detected;
+
+
+            ballModeConfirmFrames = 0;
+
+            return;
+
+        }
+
+
+        ballModeConfirmFrames++;
+
+
+        if (
+
+            ballModeConfirmFrames >=
+            MODE_CONFIRM_FRAMES
+
+        ) {
 
             if (
-                !ballTracked ||
-                ballPoseLocked ||
-                !ballStableTracking
-            ) {
-                return;
-            }
 
-
-            const detected =
-                detectBallMode();
-
-
-            if (
-                detected === null
-            ) {
-                return;
-            }
-
-
-            if (
-                detected !==
-                ballPendingMode
-            ) {
-
-                ballPendingMode =
-                    detected;
-
-                ballModeConfirmFrames =
-                    0;
-
-                return;
-
-            }
-
-
-            ballModeConfirmFrames++;
-
-
-            if (
-                ballModeConfirmFrames >= 6 &&
                 ballCurrentMode !==
                 ballPendingMode
+
             ) {
 
                 ballCurrentMode =
@@ -1547,39 +1534,354 @@ document.addEventListener(
 
         }
 
+    }
 
 
-        /* =====================================================
-           APPLE TARGET FOUND
-           ===================================================== */
 
-        appleTarget.addEventListener(
-            "targetFound",
-            function () {
+    /* =========================================================
+       APPLE FOUND
+       ========================================================= */
 
-                console.log(
-                    "APPLE TARGET FOUND - Target 0"
-                );
+    appleTarget.addEventListener(
+
+        "targetFound",
+
+        function () {
+
+            console.log(
+                "APPLE TARGET FOUND - Target 0"
+            );
 
 
-                activeTarget =
-                    0;
+            activeTarget = 0;
 
 
-                appleTracked =
+            appleTracked = true;
+
+            applePoseLocked = true;
+
+            appleStableTracking = false;
+
+            appleStableFrames = 0;
+
+
+            applePendingMode =
+                appleCurrentMode;
+
+
+            appleModeConfirmFrames = 0;
+
+
+            /*
+                Immediately hide Ball.
+            */
+
+            ballTracked = false;
+
+            ballPoseLocked = true;
+
+            ballStableTracking = false;
+
+            ballStableFrames = 0;
+
+
+            ball.setAttribute(
+                "visible",
+                false
+            );
+
+
+            /*
+                Show Apple.
+            */
+
+            apple.setAttribute(
+                "visible",
+                true
+            );
+
+
+            resetPointerState();
+
+        }
+
+    );
+
+
+
+    /* =========================================================
+       APPLE LOST
+       ========================================================= */
+
+    appleTarget.addEventListener(
+
+        "targetLost",
+
+        function () {
+
+            console.log(
+                "APPLE TARGET LOST - Target 0"
+            );
+
+
+            appleTracked = false;
+
+            applePoseLocked = true;
+
+            appleStableTracking = false;
+
+            appleStableFrames = 0;
+
+
+            apple.setAttribute(
+                "visible",
+                false
+            );
+
+
+            if (activeTarget === 0) {
+
+                activeTarget = -1;
+
+                resetPointerState();
+
+            }
+
+        }
+
+    );
+
+
+
+    /* =========================================================
+       BALL FOUND
+       ========================================================= */
+
+    ballTarget.addEventListener(
+
+        "targetFound",
+
+        function () {
+
+            console.log(
+                "BALL TARGET FOUND - Target 1"
+            );
+
+
+            activeTarget = 1;
+
+
+            ballTracked = true;
+
+            ballPoseLocked = true;
+
+            ballStableTracking = false;
+
+            ballStableFrames = 0;
+
+
+            ballPendingMode =
+                ballCurrentMode;
+
+
+            ballModeConfirmFrames = 0;
+
+
+            /*
+                Immediately hide Apple.
+            */
+
+            appleTracked = false;
+
+            applePoseLocked = true;
+
+            appleStableTracking = false;
+
+            appleStableFrames = 0;
+
+
+            apple.setAttribute(
+                "visible",
+                false
+            );
+
+
+            /*
+                Show Ball.
+            */
+
+            ball.setAttribute(
+                "visible",
+                true
+            );
+
+
+            resetPointerState();
+
+        }
+
+    );
+
+
+
+    /* =========================================================
+       BALL LOST
+       ========================================================= */
+
+    ballTarget.addEventListener(
+
+        "targetLost",
+
+        function () {
+
+            console.log(
+                "BALL TARGET LOST - Target 1"
+            );
+
+
+            ballTracked = false;
+
+            ballPoseLocked = true;
+
+            ballStableTracking = false;
+
+            ballStableFrames = 0;
+
+
+            ball.setAttribute(
+                "visible",
+                false
+            );
+
+
+            if (activeTarget === 1) {
+
+                activeTarget = -1;
+
+                resetPointerState();
+
+            }
+
+        }
+
+    );
+
+
+
+    /* =========================================================
+       POINTER EVENTS
+       ========================================================= */
+
+    function setupPointerEvents() {
+
+        const canvas =
+            scene.canvas ||
+            document.querySelector("canvas");
+
+
+        if (!canvas) {
+
+            requestAnimationFrame(
+                setupPointerEvents
+            );
+
+            return;
+
+        }
+
+
+        canvas.style.touchAction =
+            "none";
+
+
+        canvas.addEventListener(
+
+            "pointerdown",
+            pointerDown,
+            { passive: false }
+
+        );
+
+
+        canvas.addEventListener(
+
+            "pointermove",
+            pointerMove,
+            { passive: false }
+
+        );
+
+
+        canvas.addEventListener(
+
+            "pointerup",
+            pointerUp,
+            { passive: false }
+
+        );
+
+
+        canvas.addEventListener(
+
+            "pointercancel",
+            pointerCancel,
+            { passive: false }
+
+        );
+
+
+        canvas.addEventListener(
+
+            "contextmenu",
+
+            function (event) {
+
+                event.preventDefault();
+
+            },
+
+            { passive: false }
+
+        );
+
+    }
+
+
+
+    /* =========================================================
+       AR UPDATE LOOP
+       ========================================================= */
+
+    function updateAR() {
+
+
+        /*
+            APPLE STABILITY
+        */
+
+        if (
+
+            appleTracked &&
+            applePoseLocked
+
+        ) {
+
+            appleStableFrames++;
+
+
+            if (
+
+                appleStableFrames >=
+                REQUIRED_STABLE_FRAMES
+
+            ) {
+
+                appleStableTracking =
                     true;
 
 
                 applePoseLocked =
-                    true;
-
-
-                appleStableTracking =
                     false;
-
-
-                appleStableFrames =
-                    0;
 
 
                 applePendingMode =
@@ -1589,137 +1891,39 @@ document.addEventListener(
                 appleModeConfirmFrames =
                     0;
 
+            }
 
-                /*
-                    Immediately disable Ball.
-                */
-
-                ballTracked =
-                    false;
+        }
 
 
-                ballPoseLocked =
-                    true;
 
+        /*
+            BALL STABILITY
+        */
+
+        if (
+
+            ballTracked &&
+            ballPoseLocked
+
+        ) {
+
+            ballStableFrames++;
+
+
+            if (
+
+                ballStableFrames >=
+                REQUIRED_STABLE_FRAMES
+
+            ) {
 
                 ballStableTracking =
-                    false;
-
-
-                ballStableFrames =
-                    0;
-
-
-                ball.setAttribute(
-                    "visible",
-                    false
-                );
-
-
-                /*
-                    Immediately show Apple.
-                */
-
-                apple.setAttribute(
-                    "visible",
-                    true
-                );
-
-
-                resetPointerState();
-
-            }
-        );
-
-
-
-        /* =====================================================
-           APPLE TARGET LOST
-           ===================================================== */
-
-        appleTarget.addEventListener(
-            "targetLost",
-            function () {
-
-                console.log(
-                    "APPLE TARGET LOST - Target 0"
-                );
-
-
-                appleTracked =
-                    false;
-
-
-                applePoseLocked =
-                    true;
-
-
-                appleStableTracking =
-                    false;
-
-
-                appleStableFrames =
-                    0;
-
-
-                apple.setAttribute(
-                    "visible",
-                    false
-                );
-
-
-                /*
-                    Only clear active target if
-                    Apple is still the active target.
-                */
-
-                if (
-                    activeTarget === 0
-                ) {
-
-                    activeTarget =
-                        -1;
-
-                    resetPointerState();
-
-                }
-
-            }
-        );
-
-
-
-        /* =====================================================
-           BALL TARGET FOUND
-           ===================================================== */
-
-        ballTarget.addEventListener(
-            "targetFound",
-            function () {
-
-                console.log(
-                    "BALL TARGET FOUND - Target 1"
-                );
-
-
-                activeTarget =
-                    1;
-
-
-                ballTracked =
                     true;
 
 
                 ballPoseLocked =
-                    true;
-
-
-                ballStableTracking =
                     false;
-
-
-                ballStableFrames =
-                    0;
 
 
                 ballPendingMode =
@@ -1729,364 +1933,111 @@ document.addEventListener(
                 ballModeConfirmFrames =
                     0;
 
-
-                /*
-                    Immediately disable Apple.
-                */
-
-                appleTracked =
-                    false;
-
-
-                applePoseLocked =
-                    true;
-
-
-                appleStableTracking =
-                    false;
-
-
-                appleStableFrames =
-                    0;
-
-
-                apple.setAttribute(
-                    "visible",
-                    false
-                );
-
-
-                /*
-                    Immediately show Ball.
-                */
-
-                ball.setAttribute(
-                    "visible",
-                    true
-                );
-
-
-                resetPointerState();
-
             }
-        );
-
-
-
-        /* =====================================================
-           BALL TARGET LOST
-           ===================================================== */
-
-        ballTarget.addEventListener(
-            "targetLost",
-            function () {
-
-                console.log(
-                    "BALL TARGET LOST - Target 1"
-                );
-
-
-                ballTracked =
-                    false;
-
-
-                ballPoseLocked =
-                    true;
-
-
-                ballStableTracking =
-                    false;
-
-
-                ballStableFrames =
-                    0;
-
-
-                ball.setAttribute(
-                    "visible",
-                    false
-                );
-
-
-                /*
-                    Only clear active target if
-                    Ball is still the active target.
-                */
-
-                if (
-                    activeTarget === 1
-                ) {
-
-                    activeTarget =
-                        -1;
-
-                    resetPointerState();
-
-                }
-
-            }
-        );
-
-
-
-        /* =====================================================
-           POINTER EVENT SETUP
-           ===================================================== */
-
-        function setupPointerEvents() {
-
-            const canvas =
-                scene.canvas ||
-                document.querySelector(
-                    "canvas"
-                );
-
-
-            if (!canvas) {
-
-                requestAnimationFrame(
-                    setupPointerEvents
-                );
-
-                return;
-
-            }
-
-
-            canvas.style.touchAction =
-                "none";
-
-
-            canvas.addEventListener(
-                "pointerdown",
-                pointerDown,
-                {
-                    passive: false
-                }
-            );
-
-
-            canvas.addEventListener(
-                "pointermove",
-                pointerMove,
-                {
-                    passive: false
-                }
-            );
-
-
-            canvas.addEventListener(
-                "pointerup",
-                pointerUp,
-                {
-                    passive: false
-                }
-            );
-
-
-            canvas.addEventListener(
-                "pointercancel",
-                pointerCancel,
-                {
-                    passive: false
-                }
-            );
-
-
-            canvas.addEventListener(
-                "contextmenu",
-                function (event) {
-
-                    event.preventDefault();
-
-                },
-                {
-                    passive: false
-                }
-            );
 
         }
 
 
 
-        /* =====================================================
-           AR LOOP
-           ===================================================== */
+        /*
+            APPLE
+        */
 
-        function updateAR() {
+        if (
 
+            activeTarget === 0 &&
+            appleTracked &&
+            appleStableTracking
 
-            /* -------------------------------------------------
-               APPLE STABLE TRACKING
-               ------------------------------------------------- */
+        ) {
 
-            if (
-                appleTracked &&
-                applePoseLocked
-            ) {
+            updateAppleMode();
 
-                appleStableFrames++;
-
-
-                if (
-                    appleStableFrames >=
-                    REQUIRED_STABLE_FRAMES
-                ) {
-
-                    appleStableTracking =
-                        true;
-
-
-                    applePoseLocked =
-                        false;
-
-
-                    applePendingMode =
-                        appleCurrentMode;
-
-
-                    appleModeConfirmFrames =
-                        0;
-
-                }
-
-            }
-
-
-
-            /* -------------------------------------------------
-               BALL STABLE TRACKING
-               ------------------------------------------------- */
-
-            if (
-                ballTracked &&
-                ballPoseLocked
-            ) {
-
-                ballStableFrames++;
-
-
-                if (
-                    ballStableFrames >=
-                    REQUIRED_STABLE_FRAMES
-                ) {
-
-                    ballStableTracking =
-                        true;
-
-
-                    ballPoseLocked =
-                        false;
-
-
-                    ballPendingMode =
-                        ballCurrentMode;
-
-
-                    ballModeConfirmFrames =
-                        0;
-
-                }
-
-            }
-
-
-
-            /* -------------------------------------------------
-               APPLE ORIENTATION
-               ------------------------------------------------- */
-
-            if (
-                activeTarget === 0 &&
-                appleTracked &&
-                appleStableTracking &&
-                !applePoseLocked
-            ) {
-
-                updateAppleMode();
-
-                applyAppleTargetOrientation();
-
-            }
-
-
-
-            /* -------------------------------------------------
-               BALL ORIENTATION
-               ------------------------------------------------- */
-
-            if (
-                activeTarget === 1 &&
-                ballTracked &&
-                ballStableTracking &&
-                !ballPoseLocked
-            ) {
-
-                updateBallMode();
-
-                applyBallTargetOrientation();
-
-            }
-
-
-            requestAnimationFrame(
-                updateAR
-            );
+            applyAppleTargetOrientation();
 
         }
 
 
 
-        /* =====================================================
-           INITIAL STATE
-           ===================================================== */
+        /*
+            BALL
+        */
 
-        applyAppleRotation();
+        if (
 
-        applyBallRotation();
+            activeTarget === 1 &&
+            ballTracked &&
+            ballStableTracking
 
+        ) {
 
-        apple.setAttribute(
-            "visible",
-            false
-        );
+            updateBallMode();
 
+            applyBallTargetOrientation();
 
-        ball.setAttribute(
-            "visible",
-            false
-        );
+        }
 
-
-        resetPointerState();
-
-
-
-        /* =====================================================
-           START
-           ===================================================== */
-
-        scene.addEventListener(
-            "loaded",
-            function () {
-
-                setupPointerEvents();
-
-            }
-        );
 
 
         requestAnimationFrame(
             updateAR
         );
 
-
     }
 
-);
+
+
+    /* =========================================================
+       INITIAL STATE
+       ========================================================= */
+
+    applyAppleRotation();
+
+    applyBallRotation();
+
+
+    apple.setAttribute(
+        "visible",
+        false
+    );
+
+
+    ball.setAttribute(
+        "visible",
+        false
+    );
+
+
+    resetPointerState();
+
+
+
+    /* =========================================================
+       START
+       ========================================================= */
+
+    scene.addEventListener(
+
+        "loaded",
+
+        function () {
+
+            setupPointerEvents();
+
+        }
+
+    );
+
+
+    requestAnimationFrame(
+        updateAR
+    );
+
+
+});
 
 </script>
 
-
 </body>
+
 </html>
