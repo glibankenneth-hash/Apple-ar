@@ -1,141 +1,954 @@
 <!DOCTYPE html>
+
 <html>
 <head>
-  <meta charset="UTF-8">
 
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-  >
+<meta charset="UTF-8">
 
-  <title>AR Target Test</title>
+<meta
+name="viewport"
+content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
 
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+>
 
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<title>AR Children's Book</title>
 
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-    }
+<!-- =========================================================
+     A-FRAME
+     ========================================================= -->
 
-    #status {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      z-index: 9999;
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
-      background: rgba(0,0,0,0.8);
-      color: white;
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
-      padding: 12px 16px;
+<style>
 
-      font-family: Arial, sans-serif;
-      font-size: 16px;
+html, body {
 
-      border-radius: 8px;
-    }
-  </style>
+    margin: 0;
+    padding: 0;
+
+    width: 100%;
+    height: 100%;
+
+    overflow: hidden;
+
+    background: black;
+
+}
+
+a-scene {
+
+    width: 100%;
+    height: 100%;
+
+}
+
+canvas {
+
+    touch-action: none !important;
+
+}
+
+.mindar-ui-loading,
+.mindar-ui-scanning,
+.mindar-ui-error {
+
+    display: none !important;
+
+}
+
+</style>
+
 </head>
 
 <body>
 
-<div id="status">
-  Starting AR...
-</div>
-
 <a-scene
-  mindar-image="
+
+```
+mindar-image="
     imageTargetSrc: ./targets.mind;
     autoStart: true;
+
     uiScanning: no;
     uiLoading: no;
     uiError: no;
+
+    warmupTolerance: 3;
+    missTolerance: 1;
+
+    filterMinCF: 0.0005;
+    filterBeta: 0.001;
+
     maxTrack: 1;
-  "
-  color-space="sRGB"
-  renderer="colorManagement: true; physicallyCorrectLights: true"
-  vr-mode-ui="enabled: false"
-  device-orientation-permission-ui="enabled: false"
+"
+
+color-space="sRGB"
+
+renderer="
+    colorManagement: true;
+    antialias: true;
+"
+
+vr-mode-ui="enabled: false"
+
+device-orientation-permission-ui="enabled: false"
+
+embedded
+```
+
 >
 
-  <!-- PAGE A -->
-  <a-entity
-    mindar-image-target="targetIndex: 0"
-    id="pageA"
-  >
+<a-assets>
 
-    <a-box
-      position="0 0 0.2"
-      rotation="0 0 0"
-      scale="0.7 0.7 0.7"
-      color="red"
-    ></a-box>
+```
+<a-asset-item
+    id="appleModel"
+    src="./Apple.glb">
+</a-asset-item>
 
-  </a-entity>
+<a-asset-item
+    id="ballModel"
+    src="./Ball.glb">
+</a-asset-item>
+```
 
+</a-assets>
 
-  <!-- PAGE B -->
-  <a-entity
-    mindar-image-target="targetIndex: 1"
-    id="pageB"
-  >
+<a-camera
+ position="0 0 0"
+ look-controls="enabled: false"> </a-camera>
 
-    <a-sphere
-      position="0 0 0.2"
-      radius="0.35"
-      color="blue"
-    ></a-sphere>
+<!-- =========================================================
+     APPLE TARGET
+     ========================================================= -->
 
-  </a-entity>
+<a-entity
+id="appleTarget"
+mindar-image-target="targetIndex: 0"
 
+>
 
-  <a-camera
-    position="0 0 0"
-    look-controls="enabled: false"
-  ></a-camera>
+```
+<a-entity id="appleOrientation">
+
+    <a-entity id="appleRotation">
+
+        <a-gltf-model
+            id="apple"
+            src="#appleModel"
+            position="0 0 0"
+            rotation="0 0 0"
+            scale="4.54545 4.54545 4.54545"
+            visible="false"
+        ></a-gltf-model>
+
+    </a-entity>
+
+</a-entity>
+```
+
+</a-entity>
+
+<!-- =========================================================
+     BALL TARGET
+     ========================================================= -->
+
+<a-entity
+id="ballTarget"
+mindar-image-target="targetIndex: 1"
+
+>
+
+```
+<a-entity id="ballOrientation">
+
+    <a-entity id="ballRotation">
+
+        <a-gltf-model
+            id="ball"
+            src="#ballModel"
+            position="0 0 0"
+            rotation="0 0 0"
+            scale="4.54545 4.54545 4.54545"
+            visible="false"
+        ></a-gltf-model>
+
+    </a-entity>
+
+</a-entity>
+```
+
+</a-entity>
 
 </a-scene>
 
-
 <script>
 
-const status = document.getElementById("status");
+document.addEventListener("DOMContentLoaded", () => {
 
-const pageA = document.getElementById("pageA");
-const pageB = document.getElementById("pageB");
-
-pageA.addEventListener("targetFound", () => {
-
-  console.log("PAGE A FOUND");
-
-  status.innerHTML = "PAGE A FOUND — RED BOX";
-
-});
-
-pageA.addEventListener("targetLost", () => {
-
-  console.log("PAGE A LOST");
-
-  status.innerHTML = "PAGE A LOST";
-
-});
+    const THREE = AFRAME.THREE;
 
 
-pageB.addEventListener("targetFound", () => {
+    /* =====================================================
+       ELEMENTS
+       ===================================================== */
 
-  console.log("PAGE B FOUND");
+    const appleTarget =
+        document.querySelector("#appleTarget");
 
-  status.innerHTML = "PAGE B FOUND — BLUE SPHERE";
+    const ballTarget =
+        document.querySelector("#ballTarget");
 
-});
+    const apple =
+        document.querySelector("#apple");
 
-pageB.addEventListener("targetLost", () => {
+    const ball =
+        document.querySelector("#ball");
 
-  console.log("PAGE B LOST");
+    const appleOrientation =
+        document.querySelector("#appleOrientation");
 
-  status.innerHTML = "PAGE B LOST";
+    const ballOrientation =
+        document.querySelector("#ballOrientation");
+
+    const appleRotation =
+        document.querySelector("#appleRotation");
+
+    const ballRotation =
+        document.querySelector("#ballRotation");
+
+    const scene =
+        document.querySelector("a-scene");
+
+
+    /* =====================================================
+       ACTIVE TARGET
+       ===================================================== */
+
+    let activeTarget = null;
+
+
+    /* =====================================================
+       BASE SCALE
+       ===================================================== */
+
+    const BASE_SCALE = 4.54545;
+
+
+    apple.object3D.scale.set(
+        BASE_SCALE,
+        BASE_SCALE,
+        BASE_SCALE
+    );
+
+    ball.object3D.scale.set(
+        BASE_SCALE,
+        BASE_SCALE,
+        BASE_SCALE
+    );
+
+
+    /* =====================================================
+       FLOOR CORRECTION
+       ===================================================== */
+
+    const FLOOR_CORRECTION =
+        new THREE.Quaternion();
+
+    FLOOR_CORRECTION.setFromEuler(
+
+        new THREE.Euler(
+            -Math.PI / 2,
+            0,
+            0,
+            "XYZ"
+        )
+
+    );
+
+
+    /* =====================================================
+       APPLE ORIENTATION
+       ===================================================== */
+
+    function applyAppleOrientation() {
+
+        if (!appleTarget.object3D) return;
+
+
+        const targetObject =
+            appleTarget.object3D;
+
+
+        const normal =
+            new THREE.Vector3(0, 0, 1);
+
+
+        normal.applyQuaternion(
+            targetObject.quaternion
+        );
+
+
+        const vertical =
+            Math.abs(normal.y) < 0.5;
+
+
+        if (vertical) {
+
+            appleOrientation.object3D
+                .quaternion
+                .identity();
+
+        }
+        else {
+
+            appleOrientation.object3D
+                .quaternion
+                .copy(
+                    FLOOR_CORRECTION
+                );
+
+        }
+
+    }
+
+
+    /* =====================================================
+       BALL ORIENTATION
+       ===================================================== */
+
+    function applyBallOrientation() {
+
+        if (!ballTarget.object3D) return;
+
+
+        const targetObject =
+            ballTarget.object3D;
+
+
+        const normal =
+            new THREE.Vector3(0, 0, 1);
+
+
+        normal.applyQuaternion(
+            targetObject.quaternion
+        );
+
+
+        const vertical =
+            Math.abs(normal.y) < 0.5;
+
+
+        if (vertical) {
+
+            ballOrientation.object3D
+                .quaternion
+                .identity();
+
+        }
+        else {
+
+            ballOrientation.object3D
+                .quaternion
+                .copy(
+                    FLOOR_CORRECTION
+                );
+
+        }
+
+    }
+
+
+    /* =====================================================
+       APPLE FOUND
+       ===================================================== */
+
+    appleTarget.addEventListener(
+        "targetFound",
+        () => {
+
+            /*
+             * Switch immediately.
+             */
+
+            activeTarget = 0;
+
+
+            /*
+             * Hide Ball immediately.
+             */
+
+            ball.setAttribute(
+                "visible",
+                "false"
+            );
+
+
+            /*
+             * Show Apple immediately.
+             */
+
+            apple.setAttribute(
+                "visible",
+                "true"
+            );
+
+
+            /*
+             * Apply orientation immediately.
+             */
+
+            applyAppleOrientation();
+
+        }
+    );
+
+
+    /* =====================================================
+       BALL FOUND
+       ===================================================== */
+
+    ballTarget.addEventListener(
+        "targetFound",
+        () => {
+
+            /*
+             * Switch immediately.
+             */
+
+            activeTarget = 1;
+
+
+            /*
+             * Hide Apple immediately.
+             */
+
+            apple.setAttribute(
+                "visible",
+                "false"
+            );
+
+
+            /*
+             * Show Ball immediately.
+             */
+
+            ball.setAttribute(
+                "visible",
+                "true"
+            );
+
+
+            /*
+             * Apply orientation immediately.
+             */
+
+            applyBallOrientation();
+
+        }
+    );
+
+
+    /* =====================================================
+       APPLE LOST
+       ===================================================== */
+
+    appleTarget.addEventListener(
+        "targetLost",
+        () => {
+
+            /*
+             * If we have already switched to Ball,
+             * ignore Apple's old lost event.
+             */
+
+            if (activeTarget !== 0) return;
+
+
+            apple.setAttribute(
+                "visible",
+                "false"
+            );
+
+
+            activeTarget = null;
+
+        }
+    );
+
+
+    /* =====================================================
+       BALL LOST
+       ===================================================== */
+
+    ballTarget.addEventListener(
+        "targetLost",
+        () => {
+
+            /*
+             * If we have already switched to Apple,
+             * ignore Ball's old lost event.
+             */
+
+            if (activeTarget !== 1) return;
+
+
+            ball.setAttribute(
+                "visible",
+                "false"
+            );
+
+
+            activeTarget = null;
+
+        }
+    );
+
+
+    /* =====================================================
+       CONTINUOUS ORIENTATION
+       
+       NO ARTIFICIAL FRAME DELAY.
+       ===================================================== */
+
+    function trackingLoop() {
+
+        if (activeTarget === 0) {
+
+            applyAppleOrientation();
+
+        }
+
+
+        if (activeTarget === 1) {
+
+            applyBallOrientation();
+
+        }
+
+
+        requestAnimationFrame(
+            trackingLoop
+        );
+
+    }
+
+
+    trackingLoop();
+
+
+    /* =====================================================
+       POINTER / TOUCH
+       ===================================================== */
+
+    const pointers =
+        new Map();
+
+
+    let rotating = false;
+
+    let lastX = 0;
+    let lastY = 0;
+
+
+    let pinching = false;
+
+    let pinchStartDistance = 0;
+
+    let pinchStartScale =
+        BASE_SCALE;
+
+
+    /* =====================================================
+       ACTIVE ROTATION OBJECT
+       ===================================================== */
+
+    function getActiveRotationObject() {
+
+        if (activeTarget === 0) {
+
+            return appleRotation.object3D;
+
+        }
+
+
+        if (activeTarget === 1) {
+
+            return ballRotation.object3D;
+
+        }
+
+
+        return null;
+
+    }
+
+
+    /* =====================================================
+       ACTIVE MODEL
+       ===================================================== */
+
+    function getActiveModel() {
+
+        if (activeTarget === 0) {
+
+            return apple.object3D;
+
+        }
+
+
+        if (activeTarget === 1) {
+
+            return ball.object3D;
+
+        }
+
+
+        return null;
+
+    }
+
+
+    /* =====================================================
+       POINTER DOWN
+       ===================================================== */
+
+    scene.addEventListener(
+        "pointerdown",
+        (event) => {
+
+            if (activeTarget === null) return;
+
+
+            pointers.set(
+                event.pointerId,
+                {
+                    x: event.clientX,
+                    y: event.clientY
+                }
+            );
+
+
+            /* ONE FINGER */
+
+            if (pointers.size === 1) {
+
+                rotating = true;
+
+                pinching = false;
+
+
+                lastX =
+                    event.clientX;
+
+                lastY =
+                    event.clientY;
+
+            }
+
+
+            /* TWO FINGERS */
+
+            if (pointers.size === 2) {
+
+                rotating = false;
+
+                pinching = true;
+
+
+                const values =
+                    Array.from(
+                        pointers.values()
+                    );
+
+
+                const dx =
+                    values[0].x -
+                    values[1].x;
+
+
+                const dy =
+                    values[0].y -
+                    values[1].y;
+
+
+                pinchStartDistance =
+                    Math.sqrt(
+                        dx * dx +
+                        dy * dy
+                    );
+
+
+                const model =
+                    getActiveModel();
+
+
+                if (model) {
+
+                    pinchStartScale =
+                        model.scale.x;
+
+                }
+
+            }
+
+        }
+    );
+
+
+    /* =====================================================
+       POINTER MOVE
+       ===================================================== */
+
+    scene.addEventListener(
+        "pointermove",
+        (event) => {
+
+            if (
+                !pointers.has(
+                    event.pointerId
+                )
+            ) return;
+
+
+            pointers.set(
+                event.pointerId,
+                {
+                    x: event.clientX,
+                    y: event.clientY
+                }
+            );
+
+
+            /* ONE FINGER = ROTATE */
+
+            if (
+                pointers.size === 1 &&
+                rotating
+            ) {
+
+                const rotationObject =
+                    getActiveRotationObject();
+
+
+                if (!rotationObject) return;
+
+
+                const dx =
+                    event.clientX -
+                    lastX;
+
+
+                const dy =
+                    event.clientY -
+                    lastY;
+
+
+                rotationObject.rotation.y +=
+                    dx * 0.01;
+
+
+                rotationObject.rotation.x +=
+                    dy * 0.01;
+
+
+                lastX =
+                    event.clientX;
+
+
+                lastY =
+                    event.clientY;
+
+            }
+
+
+            /* TWO FINGERS = PINCH */
+
+            if (
+                pointers.size === 2 &&
+                pinching
+            ) {
+
+                const values =
+                    Array.from(
+                        pointers.values()
+                    );
+
+
+                const dx =
+                    values[0].x -
+                    values[1].x;
+
+
+                const dy =
+                    values[0].y -
+                    values[1].y;
+
+
+                const distance =
+                    Math.sqrt(
+                        dx * dx +
+                        dy * dy
+                    );
+
+
+                if (
+                    pinchStartDistance <= 0
+                ) return;
+
+
+                const factor =
+                    distance /
+                    pinchStartDistance;
+
+
+                let newScale =
+                    pinchStartScale *
+                    factor;
+
+
+                newScale =
+                    Math.max(
+                        0.3,
+                        Math.min(
+                            15.0,
+                            newScale
+                        )
+                    );
+
+
+                const model =
+                    getActiveModel();
+
+
+                if (model) {
+
+                    model.scale.set(
+                        newScale,
+                        newScale,
+                        newScale
+                    );
+
+                }
+
+            }
+
+        }
+    );
+
+
+    /* =====================================================
+       POINTER END
+       ===================================================== */
+
+    function pointerEnd(event) {
+
+        pointers.delete(
+            event.pointerId
+        );
+
+
+        if (
+            pointers.size === 0
+        ) {
+
+            rotating = false;
+
+            pinching = false;
+
+        }
+
+
+        if (
+            pointers.size === 1
+        ) {
+
+            rotating = true;
+
+            pinching = false;
+
+
+            const remaining =
+                Array.from(
+                    pointers.values()
+                )[0];
+
+
+            if (remaining) {
+
+                lastX =
+                    remaining.x;
+
+                lastY =
+                    remaining.y;
+
+            }
+
+        }
+
+    }
+
+
+    scene.addEventListener(
+        "pointerup",
+        pointerEnd
+    );
+
+    scene.addEventListener(
+        "pointercancel",
+        pointerEnd
+    );
+
+    scene.addEventListener(
+        "pointerleave",
+        pointerEnd
+    );
+
+
+    /* =====================================================
+       PREVENT BROWSER GESTURES
+       ===================================================== */
+
+    scene.addEventListener(
+        "touchstart",
+        (event) => {
+
+            event.preventDefault();
+
+        },
+        {
+            passive: false
+        }
+    );
+
+
+    scene.addEventListener(
+        "touchmove",
+        (event) => {
+
+            event.preventDefault();
+
+        },
+        {
+            passive: false
+        }
+    );
+
+
+    scene.addEventListener(
+        "touchend",
+        (event) => {
+
+            event.preventDefault();
+
+        },
+        {
+            passive: false
+        }
+    );
+
 
 });
 
