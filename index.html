@@ -11,17 +11,11 @@
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
 >
 
-<title>AR Children's Book</title>
-
-
-<!-- =========================================================
-     A-FRAME
-     ========================================================= -->
+<title>AR Children's Book Test</title>
 
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-
 
 <style>
 
@@ -35,26 +29,7 @@ body {
 
     overflow: hidden;
 
-    touch-action: none;
-
     background: transparent;
-}
-
-a-scene {
-    width: 100%;
-    height: 100%;
-
-    touch-action: none;
-}
-
-canvas {
-    touch-action: none !important;
-}
-
-.mindar-ui-scanning,
-.mindar-ui-loading,
-.mindar-ui-error {
-    display: none !important;
 }
 
 </style>
@@ -69,19 +44,10 @@ canvas {
 
     mindar-image="
         imageTargetSrc: ./targets.mind;
-
         autoStart: true;
-
         uiScanning: no;
         uiLoading: no;
         uiError: no;
-
-        warmupTolerance: 1;
-        missTolerance: 1;
-
-        filterMinCF: 0.001;
-        filterBeta: 1000;
-
         maxTrack: 1;
     "
 
@@ -100,10 +66,6 @@ canvas {
 >
 
 
-<!-- =========================================================
-     MODELS
-     ========================================================= -->
-
 <a-assets>
 
     <a-asset-item
@@ -119,98 +81,54 @@ canvas {
 </a-assets>
 
 
-<!-- =========================================================
-     CAMERA
-     ========================================================= -->
-
 <a-camera
     position="0 0 0"
     look-controls="enabled: false">
 </a-camera>
 
 
-<!-- =========================================================
-     PAGE A — APPLE
-     TARGET 0
-     ========================================================= -->
+<!-- =====================================================
+     TARGET 0 = APPLE
+     ===================================================== -->
 
 <a-entity
-    id="appleTarget"
     mindar-image-target="targetIndex: 0"
 >
 
-    <a-entity
-        id="appleOrientation"
+    <a-gltf-model
+
+        src="#appleModel"
+
+        position="0 0 0.1"
+
         rotation="0 0 0"
-    >
 
-        <a-entity
-            id="appleRotation"
-            rotation="0 0 0"
-        >
+        scale="4.54545 4.54545 4.54545"
 
-            <a-gltf-model
-
-                id="apple"
-
-                src="#appleModel"
-
-                position="0 0 0.03"
-
-                rotation="0 0 0"
-
-                scale="4.54545 4.54545 4.54545"
-
-                visible="false"
-
-            ></a-gltf-model>
-
-        </a-entity>
-
-    </a-entity>
+    ></a-gltf-model>
 
 </a-entity>
 
 
-<!-- =========================================================
-     PAGE B — BALL
-     TARGET 1
-     ========================================================= -->
+<!-- =====================================================
+     TARGET 1 = BALL
+     ===================================================== -->
 
 <a-entity
-    id="ballTarget"
     mindar-image-target="targetIndex: 1"
 >
 
-    <a-entity
-        id="ballOrientation"
+    <a-gltf-model
+
+        src="#ballModel"
+
+        position="0 0 0.1"
+
         rotation="0 0 0"
-    >
 
-        <a-entity
-            id="ballRotation"
-            rotation="0 0 0"
-        >
+        scale="4.54545 4.54545 4.54545"
 
-            <a-gltf-model
-
-                id="ball"
-
-                src="#ballModel"
-
-                position="0 0 0.03"
-
-                rotation="0 0 0"
-
-                scale="4.54545 4.54545 4.54545"
-
-                visible="false"
-
-            ></a-gltf-model>
-
-        </a-entity>
-
-    </a-entity>
+    ></a-gltf-model>
 
 </a-entity>
 
@@ -218,752 +136,152 @@ canvas {
 </a-scene>
 
 
-
 <script>
+
+/*
+=========================================================
+DEBUGGING
+=========================================================
+*/
 
 document.addEventListener("DOMContentLoaded", function () {
 
-    const THREE = AFRAME.THREE;
-
-    const scene =
-        document.querySelector("a-scene");
-
-
-    /* =========================================================
-       TARGETS
-       ========================================================= */
-
     const appleTarget =
-        document.querySelector("#appleTarget");
+        document.querySelector(
+            '[mindar-image-target="targetIndex: 0"]'
+        );
 
     const ballTarget =
-        document.querySelector("#ballTarget");
+        document.querySelector(
+            '[mindar-image-target="targetIndex: 1"]'
+        );
 
 
-    /* =========================================================
-       MODELS
-       ========================================================= */
+    appleTarget.addEventListener(
+        "targetFound",
+        function () {
+
+            console.log(
+                "=============================="
+            );
+
+            console.log(
+                "APPLE TARGET FOUND"
+            );
+
+            console.log(
+                "Target Index: 0"
+            );
+
+            console.log(
+                "=============================="
+            );
+
+        }
+    );
+
+
+    appleTarget.addEventListener(
+        "targetLost",
+        function () {
+
+            console.log(
+                "APPLE TARGET LOST"
+            );
+
+        }
+    );
+
+
+    ballTarget.addEventListener(
+        "targetFound",
+        function () {
+
+            console.log(
+                "=============================="
+            );
+
+            console.log(
+                "BALL TARGET FOUND"
+            );
+
+            console.log(
+                "Target Index: 1"
+            );
+
+            console.log(
+                "=============================="
+            );
+
+        }
+    );
+
+
+    ballTarget.addEventListener(
+        "targetLost",
+        function () {
+
+            console.log(
+                "BALL TARGET LOST"
+            );
+
+        }
+    );
+
 
     const apple =
-        document.querySelector("#apple");
+        document.querySelector("#appleModel");
+
 
     const ball =
-        document.querySelector("#ball");
+        document.querySelector("#ballModel");
 
 
-    /* =========================================================
-       ORIENTATION
-       ========================================================= */
-
-    const appleOrientation =
-        document.querySelector("#appleOrientation");
-
-    const ballOrientation =
-        document.querySelector("#ballOrientation");
-
-
-    /* =========================================================
-       ROTATION
-       ========================================================= */
-
-    const appleRotation =
-        document.querySelector("#appleRotation");
-
-    const ballRotation =
-        document.querySelector("#ballRotation");
-
-
-    /* =========================================================
-       STATE
-       ========================================================= */
-
-    let activeTarget = -1;
-
-
-    let appleTracked = false;
-    let ballTracked = false;
-
-
-    /* =========================================================
-       USER ROTATION
-       ========================================================= */
-
-    let appleRotationX = 0;
-    let appleRotationY = 0;
-
-    let ballRotationX = 0;
-    let ballRotationY = 0;
-
-
-    const ROTATION_SPEED = 0.01;
-
-
-    function applyAppleRotation() {
-
-        appleRotation.object3D.rotation.x =
-            appleRotationX;
-
-        appleRotation.object3D.rotation.y =
-            appleRotationY;
-
-        appleRotation.object3D.rotation.z =
-            0;
-
-    }
-
-
-    function applyBallRotation() {
-
-        ballRotation.object3D.rotation.x =
-            ballRotationX;
-
-        ballRotation.object3D.rotation.y =
-            ballRotationY;
-
-        ballRotation.object3D.rotation.z =
-            0;
-
-    }
-
-
-    function rotateApple(dx, dy) {
-
-        appleRotationY +=
-            dx * ROTATION_SPEED;
-
-        appleRotationX +=
-            dy * ROTATION_SPEED;
-
-        applyAppleRotation();
-
-    }
-
-
-    function rotateBall(dx, dy) {
-
-        ballRotationY +=
-            dx * ROTATION_SPEED;
-
-        ballRotationX +=
-            dy * ROTATION_SPEED;
-
-        applyBallRotation();
-
-    }
-
-
-    /* =========================================================
-       TOUCH / PINCH
-       ========================================================= */
-
-    const pointers = new Map();
-
-    let rotationPointerId = null;
-
-    let previousX = 0;
-    let previousY = 0;
-
-    let isRotating = false;
-
-    let pinchStartDistance = null;
-    let pinchStartScale = 1;
-
-
-    function getPinchDistance() {
-
-        if (pointers.size !== 2)
-            return null;
-
-        const values =
-            Array.from(pointers.values());
-
-        const a = values[0];
-        const b = values[1];
-
-        const dx =
-            a.x - b.x;
-
-        const dy =
-            a.y - b.y;
-
-        return Math.sqrt(
-            dx * dx + dy * dy
-        );
-
-    }
-
-
-    function resetPointers() {
-
-        pointers.clear();
-
-        rotationPointerId = null;
-
-        isRotating = false;
-
-        pinchStartDistance = null;
-
-    }
-
-
-    function pointerDown(event) {
-
-        if (activeTarget === -1)
-            return;
-
-
-        pointers.set(
-            event.pointerId,
-            {
-                x: event.clientX,
-                y: event.clientY
-            }
-        );
-
-
-        if (pointers.size === 1) {
-
-            rotationPointerId =
-                event.pointerId;
-
-            previousX =
-                event.clientX;
-
-            previousY =
-                event.clientY;
-
-            isRotating = true;
-
-        }
-
-        else {
-
-            isRotating = false;
-
-            rotationPointerId = null;
-
-            pinchStartDistance = null;
-
-        }
-
-
-        try {
-
-            event.target.setPointerCapture(
-                event.pointerId
-            );
-
-        }
-
-        catch (e) {}
-
-
-        event.preventDefault();
-
-    }
-
-
-    function pointerMove(event) {
-
-        if (activeTarget === -1)
-            return;
-
-        if (!pointers.has(event.pointerId))
-            return;
-
-
-        pointers.set(
-            event.pointerId,
-            {
-                x: event.clientX,
-                y: event.clientY
-            }
-        );
-
-
-        /* =====================================================
-           ONE FINGER = ROTATE
-           ===================================================== */
-
-        if (
-
-            pointers.size === 1 &&
-            isRotating &&
-            rotationPointerId === event.pointerId
-
-        ) {
-
-            const dx =
-                event.clientX - previousX;
-
-            const dy =
-                event.clientY - previousY;
-
-
-            if (activeTarget === 0) {
-
-                rotateApple(dx, dy);
-
-            }
-
-            else if (activeTarget === 1) {
-
-                rotateBall(dx, dy);
-
-            }
-
-
-            previousX =
-                event.clientX;
-
-            previousY =
-                event.clientY;
-
-        }
-
-
-        /* =====================================================
-           TWO FINGERS = SCALE
-           ===================================================== */
-
-        else if (pointers.size === 2) {
-
-            isRotating = false;
-
-
-            const distance =
-                getPinchDistance();
-
-
-            if (distance === null)
-                return;
-
-
-            let object =
-                activeTarget === 0
-                    ? apple
-                    : ball;
-
-
-            if (
-                pinchStartDistance === null
-            ) {
-
-                pinchStartDistance =
-                    distance;
-
-                pinchStartScale =
-                    object.object3D.scale.x;
-
-            }
-
-            else {
-
-                let newScale =
-
-                    pinchStartScale *
-                    (
-                        distance /
-                        pinchStartDistance
-                    );
-
-
-                const baseScale =
-                    4.54545;
-
-
-                newScale =
-                    THREE.MathUtils.clamp(
-
-                        newScale,
-
-                        baseScale * 0.25,
-
-                        baseScale * 4
-
-                    );
-
-
-                object.object3D.scale.set(
-
-                    newScale,
-                    newScale,
-                    newScale
-
-                );
-
-            }
-
-        }
-
-
-        event.preventDefault();
-
-    }
-
-
-    function pointerUp(event) {
-
-        pointers.delete(
-            event.pointerId
-        );
-
-
-        if (
-            rotationPointerId ===
-            event.pointerId
-        ) {
-
-            rotationPointerId = null;
-
-            isRotating = false;
-
-        }
-
-
-        if (pointers.size < 2) {
-
-            pinchStartDistance = null;
-
-        }
-
-
-        event.preventDefault();
-
-    }
-
-
-    function pointerCancel(event) {
-
-        pointers.delete(
-            event.pointerId
-        );
-
-
-        if (
-            rotationPointerId ===
-            event.pointerId
-        ) {
-
-            rotationPointerId = null;
-
-            isRotating = false;
-
-        }
-
-
-        if (pointers.size < 2) {
-
-            pinchStartDistance = null;
-
-        }
-
-    }
-
-
-    /* =========================================================
-       FLOOR ORIENTATION
-       ========================================================= */
-
-    const FLOOR_ROTATION =
-        new THREE.Euler(
-
-            -Math.PI / 2,
-            0,
-            0,
-            "XYZ"
-
-        );
-
-
-    let appleFloorMode = false;
-    let ballFloorMode = false;
-
-
-    function updateFloorOrientation() {
-
-        if (appleTracked) {
-
-            appleOrientation.object3D.rotation.copy(
-                FLOOR_ROTATION
-            );
-
-        }
-
-
-        if (ballTracked) {
-
-            ballOrientation.object3D.rotation.copy(
-                FLOOR_ROTATION
-            );
-
-        }
-
-    }
-
-
-    /* =========================================================
-       APPLE TARGET FOUND
-       ========================================================= */
-
-    appleTarget.addEventListener(
-        "targetFound",
-        function () {
-
-            console.log(
-                "APPLE FOUND"
-            );
-
-
-            activeTarget = 0;
-
-            appleTracked = true;
-
-            ballTracked = false;
-
-
-            /*
-                IMPORTANT:
-                Hide Ball immediately.
-            */
-
-            ball.setAttribute(
-                "visible",
-                false
-            );
-
-
-            /*
-                Show Apple immediately.
-            */
-
-            apple.setAttribute(
-                "visible",
-                true
-            );
-
-
-            resetPointers();
-
-        }
-    );
-
-
-    /* =========================================================
-       APPLE TARGET LOST
-       ========================================================= */
-
-    appleTarget.addEventListener(
-        "targetLost",
-        function () {
-
-            console.log(
-                "APPLE LOST"
-            );
-
-
-            appleTracked = false;
-
-
-            apple.setAttribute(
-                "visible",
-                false
-            );
-
-
-            /*
-                Only clear active target if
-                Apple is still the active target.
-            */
-
-            if (activeTarget === 0) {
-
-                activeTarget = -1;
-
-                resetPointers();
-
-            }
-
-        }
-    );
-
-
-    /* =========================================================
-       BALL TARGET FOUND
-       ========================================================= */
-
-    ballTarget.addEventListener(
-        "targetFound",
-        function () {
-
-            console.log(
-                "BALL FOUND"
-            );
-
-
-            activeTarget = 1;
-
-            ballTracked = true;
-
-            appleTracked = false;
-
-
-            /*
-                IMPORTANT:
-                Hide Apple immediately.
-            */
-
-            apple.setAttribute(
-                "visible",
-                false
-            );
-
-
-            /*
-                Show Ball immediately.
-            */
-
-            ball.setAttribute(
-                "visible",
-                true
-            );
-
-
-            resetPointers();
-
-        }
-    );
-
-
-    /* =========================================================
-       BALL TARGET LOST
-       ========================================================= */
-
-    ballTarget.addEventListener(
-        "targetLost",
-        function () {
-
-            console.log(
-                "BALL LOST"
-            );
-
-
-            ballTracked = false;
-
-
-            ball.setAttribute(
-                "visible",
-                false
-            );
-
-
-            if (activeTarget === 1) {
-
-                activeTarget = -1;
-
-                resetPointers();
-
-            }
-
-        }
-    );
-
-
-    /* =========================================================
-       CANVAS INPUT
-       ========================================================= */
-
-    function setupPointerEvents() {
-
-        const canvas =
-            scene.canvas ||
-            document.querySelector("canvas");
-
-
-        if (!canvas) {
-
-            requestAnimationFrame(
-                setupPointerEvents
-            );
-
-            return;
-
-        }
-
-
-        canvas.style.touchAction =
-            "none";
-
-
-        canvas.addEventListener(
-            "pointerdown",
-            pointerDown,
-            { passive: false }
-        );
-
-
-        canvas.addEventListener(
-            "pointermove",
-            pointerMove,
-            { passive: false }
-        );
-
-
-        canvas.addEventListener(
-            "pointerup",
-            pointerUp,
-            { passive: false }
-        );
-
-
-        canvas.addEventListener(
-            "pointercancel",
-            pointerCancel,
-            { passive: false }
-        );
-
-
-        canvas.addEventListener(
-            "contextmenu",
-            function (event) {
-                event.preventDefault();
-            },
-            { passive: false }
-        );
-
-    }
-
-
-    /* =========================================================
-       INITIAL STATE
-       ========================================================= */
-
-    apple.setAttribute(
-        "visible",
-        false
-    );
-
-    ball.setAttribute(
-        "visible",
-        false
-    );
-
-
-    applyAppleRotation();
-    applyBallRotation();
-
-    resetPointers();
-
-
-    /* =========================================================
-       START
-       ========================================================= */
-
-    scene.addEventListener(
+    apple.addEventListener(
         "loaded",
         function () {
 
-            setupPointerEvents();
+            console.log(
+                "APPLE GLB LOADED"
+            );
+
+        }
+    );
+
+
+    apple.addEventListener(
+        "error",
+        function (event) {
+
+            console.error(
+                "APPLE GLB ERROR",
+                event
+            );
+
+        }
+    );
+
+
+    ball.addEventListener(
+        "loaded",
+        function () {
+
+            console.log(
+                "BALL GLB LOADED"
+            );
+
+        }
+    );
+
+
+    ball.addEventListener(
+        "error",
+        function (event) {
+
+            console.error(
+                "BALL GLB ERROR",
+                event
+            );
 
         }
     );
@@ -974,5 +292,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
 </body>
+
 </html>
 ```
