@@ -133,6 +133,47 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
     /* =========================================================
+       TARGET TRACKING STATE
+       ========================================================= */
+
+    /*
+        IMPORTANT:
+
+        MindAR can lose the image when the camera moves away.
+
+        We do NOT allow the apple to keep receiving unreliable
+        orientation updates after the target is lost.
+
+        Instead:
+
+        targetFound
+            → apple visible
+            → tracking active
+
+        targetLost
+            → apple hidden
+            → tracking stopped
+
+        targetFound again
+            → apple immediately visible
+            → tracking resumes
+    */
+
+    let targetIsTracked = false;
+
+
+    /*
+        This controls whether the target orientation should
+        currently be updated.
+
+        It is deliberately separate from the apple's own
+        user rotation.
+    */
+
+    let allowTargetUpdates = false;
+
+
+    /* =========================================================
        TARGET ORIENTATION
        ========================================================= */
 
@@ -147,7 +188,7 @@ document.addEventListener("DOMContentLoaded", function () {
         When the target is lying flat on the floor,
         rotate the ORIENTATION container.
 
-        User rotation is kept completely separate.
+        User rotation remains completely separate.
     */
 
     const FLOOR_CORRECTION =
@@ -186,6 +227,20 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
     function updateTargetMode() {
+
+        /*
+            Do not update orientation while the target
+            is lost.
+
+            This is the important part that prevents
+            the apple from rotating strangely while
+            the camera is searching.
+        */
+
+        if (!targetIsTracked) {
+            return;
+        }
+
 
         if (!target.object3D) {
             return;
@@ -260,6 +315,20 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function applyTargetOrientation() {
 
+        /*
+            IMPORTANT:
+
+            Do not modify the apple orientation when
+            the image target has been lost.
+
+            This keeps the last valid orientation frozen.
+        */
+
+        if (!targetIsTracked) {
+            return;
+        }
+
+
         if (
             currentMode === "floor"
         ) {
@@ -281,29 +350,15 @@ document.addEventListener("DOMContentLoaded", function () {
        USER ROTATION
        =========================================================
 
-       IMPORTANT:
-
-       User rotation is completely independent from
-       MindAR target orientation.
-
-       We directly modify the rotation container.
-
-       This avoids quaternion premultiplication and avoids
-       mixing the floor correction with touch rotation.
-       ========================================================= */
+       User rotation remains completely independent
+       from MindAR target orientation.
+    */
 
 
     let rotationX = 0;
 
     let rotationY = 0;
 
-
-    /*
-        Rotation sensitivity.
-
-        Increase for faster rotation.
-        Decrease for slower rotation.
-    */
 
     const ROTATION_SPEED = 0.010;
 
@@ -321,18 +376,13 @@ document.addEventListener("DOMContentLoaded", function () {
         /*
         ---------------------------------------------------------
         HORIZONTAL
+        ---------------------------------------------------------
 
         Finger RIGHT:
-            deltaX > 0
-
-        Apple RIGHT:
-            rotationY increases
+            Apple rotates RIGHT
 
         Finger LEFT:
-            deltaX < 0
-
-        Apple LEFT:
-            rotationY decreases
+            Apple rotates LEFT
         ---------------------------------------------------------
         */
 
@@ -343,22 +393,13 @@ document.addEventListener("DOMContentLoaded", function () {
         /*
         ---------------------------------------------------------
         VERTICAL
+        ---------------------------------------------------------
 
-        Browser coordinates:
+        Finger UP:
+            Apple rotates UP
 
-            UP:
-                deltaY < 0
-
-            DOWN:
-                deltaY > 0
-
-        Therefore:
-
-            finger UP
-                → Apple UP
-
-            finger DOWN
-                → Apple DOWN
+        Finger DOWN:
+            Apple rotates DOWN
         ---------------------------------------------------------
         */
 
@@ -367,10 +408,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
         /*
-        Prevent unlimited floating-point growth.
-
-        This does NOT restrict the actual rotation.
-        It simply keeps the values manageable.
+            Prevent unlimited floating-point growth.
         */
 
         if (rotationX > Math.PI * 2) {
@@ -543,6 +581,16 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function pointerDown(event) {
 
+        /*
+            Ignore interaction while the target is not
+            currently tracked.
+        */
+
+        if (!targetIsTracked) {
+            return;
+        }
+
+
         pointers.set(
             event.pointerId,
             {
@@ -553,7 +601,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
         /*
-        One finger = rotation.
+            One finger = rotation.
         */
 
         if (pointers.size === 1) {
@@ -577,7 +625,7 @@ document.addEventListener("DOMContentLoaded", function () {
         else {
 
             /*
-            Two fingers = pinch.
+                Two fingers = pinch.
             */
 
             isRotating =
@@ -612,6 +660,13 @@ document.addEventListener("DOMContentLoaded", function () {
        ========================================================= */
 
     function pointerMove(event) {
+
+        if (
+            !targetIsTracked
+        ) {
+            return;
+        }
+
 
         if (
             !pointers.has(
@@ -757,6 +812,139 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
     /* =========================================================
+       TARGET FOUND
+       ========================================================= */
+
+    target.addEventListener(
+        "targetFound",
+        function () {
+
+            /*
+                MindAR has found the page again.
+
+                Resume tracking immediately.
+            */
+
+            targetIsTracked =
+                true;
+
+
+            allowTargetUpdates =
+                true;
+
+
+            /*
+                Reset the mode detection buffer so the
+                newly detected page can establish whether
+                it is horizontal or vertical.
+            */
+
+            pendingMode =
+                currentMode;
+
+            modeConfirmFrames =
+                0;
+
+
+            /*
+                Make the apple visible immediately.
+
+                Its user rotation and scale have NOT been
+                reset.
+            */
+
+            apple.setAttribute(
+                "visible",
+                true
+            );
+
+
+            /*
+                Clear any pointer state left over from
+                when the camera moved away.
+            */
+
+            pointers.clear();
+
+            rotationPointerId =
+                null;
+
+            isRotating =
+                false;
+
+            pinchStartDistance =
+                null;
+
+        }
+    );
+
+
+    /* =========================================================
+       TARGET LOST
+       ========================================================= */
+
+    target.addEventListener(
+        "targetLost",
+        function () {
+
+            /*
+                Stop accepting tracking updates.
+
+                This is what prevents the weird rotation
+                while MindAR is searching.
+            */
+
+            targetIsTracked =
+                false;
+
+
+            allowTargetUpdates =
+                false;
+
+
+            /*
+                Hide the apple.
+
+                IMPORTANT:
+
+                We do NOT reset:
+
+                    rotationX
+                    rotationY
+                    scale
+                    currentMode
+
+                Therefore the user's interaction state
+                is preserved.
+            */
+
+            apple.setAttribute(
+                "visible",
+                false
+            );
+
+
+            /*
+                Clear pointer state so a finger movement
+                during target loss cannot rotate the apple.
+            */
+
+            pointers.clear();
+
+            rotationPointerId =
+                null;
+
+            isRotating =
+                false;
+
+            pinchStartDistance =
+                null;
+
+        }
+    );
+
+
+    /* =========================================================
        SETUP POINTER EVENTS
        ========================================================= */
 
@@ -839,9 +1027,20 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function updateAR() {
 
+        /*
+            ONLY update the target orientation while
+            MindAR confirms that the image is currently
+            tracked.
+
+            When targetLost happens, this completely stops.
+
+            Therefore the apple cannot receive unstable
+            orientation data while the camera is away.
+        */
+
         if (
-            target.object3D &&
-            target.object3D.visible
+            targetIsTracked &&
+            allowTargetUpdates
         ) {
 
             updateTargetMode();
@@ -876,6 +1075,20 @@ document.addEventListener("DOMContentLoaded", function () {
     */
 
     applyUserRotation();
+
+
+    /*
+        Start hidden until MindAR actually detects
+        the image target.
+
+        This prevents the apple from appearing before
+        the page has been recognized.
+    */
+
+    apple.setAttribute(
+        "visible",
+        false
+    );
 
 
     requestAnimationFrame(
