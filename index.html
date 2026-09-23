@@ -15,289 +15,437 @@
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
 <style>
+
 html,
 body {
     margin: 0;
     padding: 0;
+
     width: 100%;
     height: 100%;
+
     overflow: hidden;
+
     touch-action: none;
+
     background: transparent;
 }
 
 a-scene {
     width: 100%;
     height: 100%;
+
     touch-action: none;
 }
 
 canvas {
     touch-action: none !important;
 }
+
+
+/* =========================================================
+   COMPLETELY HIDE MIN DAR UI
+   ========================================================= */
+
+.mindar-ui-scanning,
+.mindar-ui-loading,
+.mindar-ui-error {
+    display: none !important;
+}
+
 </style>
 </head>
 
+
 <body>
+
 
 <a-scene
     mindar-image="
         imageTargetSrc: ./targets.mind;
+
         autoStart: true;
-        filterMinCF: 0.0001;
-        filterBeta: 0.01;
+
+        uiScanning: no;
+        uiLoading: no;
+        uiError: no;
+
+        warmupTolerance: 8;
+        missTolerance: 8;
+
+        filterMinCF: 0.0005;
+        filterBeta: 0.001;
     "
+
     color-space="sRGB"
-    renderer="colorManagement: true; antialias: true;"
+
+    renderer="
+        colorManagement: true;
+        antialias: true;
+    "
+
     vr-mode-ui="enabled: false"
+
     device-orientation-permission-ui="enabled: false"
+
     embedded
 >
 
-    <a-assets>
 
-        <a-asset-item
-            id="appleModel"
-            src="./Apple.glb">
-        </a-asset-item>
+<a-assets>
 
-    </a-assets>
+    <a-asset-item
+        id="appleModel"
+        src="./Apple.glb">
+    </a-asset-item>
 
-
-    <a-camera
-        position="0 0 0"
-        look-controls="enabled: false">
-    </a-camera>
+</a-assets>
 
 
-    <a-entity
-        id="imageTarget"
-        mindar-image-target="targetIndex: 0"
-    >
+<a-camera
+    position="0 0 0"
+    look-controls="enabled: false">
+</a-camera>
+
+
+<a-entity
+    id="imageTarget"
+    mindar-image-target="targetIndex: 0"
+>
+
+
+    <!--
+        TARGET ORIENTATION
+
+        This layer handles whether the page is
+        vertical or lying flat.
+    -->
+
+    <a-entity id="appleOrientation">
+
 
         <!--
-            IMPORTANT HIERARCHY
+            USER ROTATION
 
-            MindAR target
-                ↓
-            appleOrientation
-                ↓
-            appleRotation
-                ↓
-            apple
+            This layer contains the user's
+            touch rotation.
         -->
 
-        <a-entity id="appleOrientation">
+        <a-entity id="appleRotation">
 
-            <a-entity id="appleRotation">
 
-                <a-gltf-model
-                    id="apple"
-                    src="#appleModel"
-                    position="0 0 0"
-                    rotation="0 0 0"
-                    scale="1 1 1"
-                >
-                </a-gltf-model>
+            <a-gltf-model
+                id="apple"
 
-            </a-entity>
+                src="#appleModel"
+
+                position="0 0 0"
+
+                rotation="0 0 0"
+
+                scale="1 1 1"
+
+                visible="false"
+            >
+            </a-gltf-model>
+
 
         </a-entity>
 
+
     </a-entity>
+
+
+</a-entity>
+
 
 </a-scene>
 
 
+
 <script>
 
-document.addEventListener("DOMContentLoaded", function () {
 
-    const scene =
-        document.querySelector("a-scene");
-
-    const target =
-        document.querySelector("#imageTarget");
-
-    const appleOrientation =
-        document.querySelector("#appleOrientation");
-
-    const appleRotation =
-        document.querySelector("#appleRotation");
-
-    const apple =
-        document.querySelector("#apple");
-
-    const THREE =
-        AFRAME.THREE;
+document.addEventListener(
+    "DOMContentLoaded",
+    function () {
 
 
-    /* =========================================================
-       TARGET TRACKING STATE
-       ========================================================= */
+        /* =====================================================
+           ELEMENTS
+           ===================================================== */
 
-    /*
-        IMPORTANT:
-
-        MindAR can lose the image when the camera moves away.
-
-        We do NOT allow the apple to keep receiving unreliable
-        orientation updates after the target is lost.
-
-        Instead:
-
-        targetFound
-            → apple visible
-            → tracking active
-
-        targetLost
-            → apple hidden
-            → tracking stopped
-
-        targetFound again
-            → apple immediately visible
-            → tracking resumes
-    */
-
-    let targetIsTracked = false;
-
-
-    /*
-        This controls whether the target orientation should
-        currently be updated.
-
-        It is deliberately separate from the apple's own
-        user rotation.
-    */
-
-    let allowTargetUpdates = false;
-
-
-    /* =========================================================
-       TARGET ORIENTATION
-       ========================================================= */
-
-    let currentMode = "vertical";
-
-    let pendingMode = "vertical";
-
-    let modeConfirmFrames = 0;
-
-
-    /*
-        When the target is lying flat on the floor,
-        rotate the ORIENTATION container.
-
-        User rotation remains completely separate.
-    */
-
-    const FLOOR_CORRECTION =
-        new THREE.Quaternion().setFromEuler(
-            new THREE.Euler(
-                -Math.PI / 2,
-                0,
-                0,
-                "XYZ"
-            )
-        );
-
-
-    const worldUp =
-        new THREE.Vector3(
-            0,
-            1,
-            0
-        );
-
-
-    const targetNormal =
-        new THREE.Vector3(
-            0,
-            0,
-            1
-        );
-
-
-    const worldNormal =
-        new THREE.Vector3();
-
-
-    const targetQuaternion =
-        new THREE.Quaternion();
-
-
-    function updateTargetMode() {
-
-        /*
-            Do not update orientation while the target
-            is lost.
-
-            This is the important part that prevents
-            the apple from rotating strangely while
-            the camera is searching.
-        */
-
-        if (!targetIsTracked) {
-            return;
-        }
-
-
-        if (!target.object3D) {
-            return;
-        }
-
-
-        target.object3D.getWorldQuaternion(
-            targetQuaternion
-        );
-
-
-        worldNormal
-            .copy(targetNormal)
-            .applyQuaternion(targetQuaternion)
-            .normalize();
-
-
-        const verticalDot =
-            Math.abs(
-                worldNormal.dot(worldUp)
+        const scene =
+            document.querySelector(
+                "a-scene"
             );
 
 
-        let detectedMode;
+        const target =
+            document.querySelector(
+                "#imageTarget"
+            );
 
 
-        if (verticalDot > 0.55) {
+        const appleOrientation =
+            document.querySelector(
+                "#appleOrientation"
+            );
 
-            detectedMode = "floor";
+
+        const appleRotation =
+            document.querySelector(
+                "#appleRotation"
+            );
+
+
+        const apple =
+            document.querySelector(
+                "#apple"
+            );
+
+
+        const THREE =
+            AFRAME.THREE;
+
+
+
+        /* =====================================================
+           TRACKING STATE
+           ===================================================== */
+
+        let targetIsTracked =
+            false;
+
+
+        /*
+            TRUE when MindAR has lost the target.
+
+            While TRUE, the target is NOT allowed
+            to modify the Apple anymore.
+        */
+
+        let poseLocked =
+            true;
+
+
+        /*
+            Prevents the target from changing the
+            Apple orientation during the unstable
+            edge-tracking period.
+        */
+
+        let stableTracking =
+            false;
+
+
+        /*
+            Number of consecutive good frames.
+
+            We don't immediately trust a newly
+            detected target.
+        */
+
+        let stableFrames =
+            0;
+
+
+        const REQUIRED_STABLE_FRAMES =
+            8;
+
+
+
+        /* =====================================================
+           TARGET ORIENTATION
+           ===================================================== */
+
+        let currentMode =
+            "vertical";
+
+
+        let pendingMode =
+            "vertical";
+
+
+        let modeConfirmFrames =
+            0;
+
+
+        const FLOOR_CORRECTION =
+            new THREE.Quaternion().setFromEuler(
+
+                new THREE.Euler(
+                    -Math.PI / 2,
+                    0,
+                    0,
+                    "XYZ"
+                )
+
+            );
+
+
+        const worldUp =
+            new THREE.Vector3(
+                0,
+                1,
+                0
+            );
+
+
+        const targetNormal =
+            new THREE.Vector3(
+                0,
+                0,
+                1
+            );
+
+
+        const worldNormal =
+            new THREE.Vector3();
+
+
+        const targetQuaternion =
+            new THREE.Quaternion();
+
+
+
+        /* =====================================================
+           GET TARGET ORIENTATION
+           ===================================================== */
+
+        function detectTargetMode() {
+
+
+            if (
+                !targetIsTracked
+            ) {
+                return null;
+            }
+
+
+            if (
+                poseLocked
+            ) {
+                return null;
+            }
+
+
+            target.object3D.getWorldQuaternion(
+                targetQuaternion
+            );
+
+
+            worldNormal
+                .copy(targetNormal)
+                .applyQuaternion(
+                    targetQuaternion
+                )
+                .normalize();
+
+
+            const verticalDot =
+                Math.abs(
+                    worldNormal.dot(
+                        worldUp
+                    )
+                );
+
+
+            /*
+                VERY IMPORTANT:
+
+                Ignore the dangerous middle zone.
+
+                When the phone is almost looking away
+                from the page, MindAR's estimated
+                orientation can jump.
+
+                We simply don't change mode there.
+            */
+
+            if (
+                verticalDot > 0.70
+            ) {
+
+                return "floor";
+
+            }
+
+
+            if (
+                verticalDot < 0.20
+            ) {
+
+                return "vertical";
+
+            }
+
+
+            /*
+                Uncertain orientation.
+
+                Keep whatever mode was already stable.
+            */
+
+            return currentMode;
 
         }
-        else if (verticalDot < 0.25) {
-
-            detectedMode = "vertical";
-
-        }
-        else {
-
-            detectedMode = currentMode;
-
-        }
 
 
-        if (detectedMode !== pendingMode) {
 
-            pendingMode =
-                detectedMode;
+        /* =====================================================
+           UPDATE TARGET MODE
+           ===================================================== */
 
-            modeConfirmFrames = 0;
+        function updateTargetMode() {
 
-        }
-        else {
+
+            if (
+                !targetIsTracked ||
+                poseLocked ||
+                !stableTracking
+            ) {
+                return;
+            }
+
+
+            const detectedMode =
+                detectTargetMode();
+
+
+            if (
+                detectedMode === null
+            ) {
+                return;
+            }
+
+
+            if (
+                detectedMode !==
+                pendingMode
+            ) {
+
+                pendingMode =
+                    detectedMode;
+
+                modeConfirmFrames =
+                    0;
+
+                return;
+
+            }
+
 
             modeConfirmFrames++;
 
+
+            /*
+                Require many consecutive frames
+                before changing floor/vertical mode.
+            */
+
             if (
-                modeConfirmFrames >= 12 &&
+                modeConfirmFrames >= 20 &&
                 currentMode !== pendingMode
             ) {
 
@@ -305,797 +453,920 @@ document.addEventListener("DOMContentLoaded", function () {
                     pendingMode;
 
             }
-        }
-    }
 
-
-    /* =========================================================
-       FLOOR / VERTICAL ORIENTATION
-       ========================================================= */
-
-    function applyTargetOrientation() {
-
-        /*
-            IMPORTANT:
-
-            Do not modify the apple orientation when
-            the image target has been lost.
-
-            This keeps the last valid orientation frozen.
-        */
-
-        if (!targetIsTracked) {
-            return;
         }
 
 
-        if (
-            currentMode === "floor"
+
+        /* =====================================================
+           APPLY TARGET ORIENTATION
+           ===================================================== */
+
+        function applyTargetOrientation() {
+
+
+            /*
+                NEVER modify the Apple while
+                pose is locked.
+            */
+
+            if (
+                !targetIsTracked ||
+                poseLocked ||
+                !stableTracking
+            ) {
+                return;
+            }
+
+
+            if (
+                currentMode ===
+                "floor"
+            ) {
+
+                appleOrientation
+                    .object3D
+                    .quaternion
+                    .copy(
+                        FLOOR_CORRECTION
+                    );
+
+            }
+            else {
+
+                appleOrientation
+                    .object3D
+                    .quaternion
+                    .identity();
+
+            }
+
+        }
+
+
+
+        /* =====================================================
+           USER ROTATION
+           ===================================================== */
+
+        let rotationX =
+            0;
+
+
+        let rotationY =
+            0;
+
+
+        const ROTATION_SPEED =
+            0.010;
+
+
+
+        function rotateApple(
+            deltaX,
+            deltaY
         ) {
 
-            appleOrientation.object3D.quaternion.copy(
-                FLOOR_CORRECTION
+
+            rotationY +=
+                deltaX *
+                ROTATION_SPEED;
+
+
+            rotationX +=
+                deltaY *
+                ROTATION_SPEED;
+
+
+
+            if (
+                rotationX >
+                Math.PI * 2
+            ) {
+
+                rotationX -=
+                    Math.PI * 2;
+
+            }
+
+
+            if (
+                rotationX <
+                -Math.PI * 2
+            ) {
+
+                rotationX +=
+                    Math.PI * 2;
+
+            }
+
+
+            if (
+                rotationY >
+                Math.PI * 2
+            ) {
+
+                rotationY -=
+                    Math.PI * 2;
+
+            }
+
+
+            if (
+                rotationY <
+                -Math.PI * 2
+            ) {
+
+                rotationY +=
+                    Math.PI * 2;
+
+            }
+
+
+            applyUserRotation();
+
+        }
+
+
+
+        function applyUserRotation() {
+
+
+            appleRotation
+                .object3D
+                .rotation
+                .x =
+                rotationX;
+
+
+            appleRotation
+                .object3D
+                .rotation
+                .y =
+                rotationY;
+
+
+            appleRotation
+                .object3D
+                .rotation
+                .z =
+                0;
+
+        }
+
+
+
+        /* =====================================================
+           POINTER STATE
+           ===================================================== */
+
+        const pointers =
+            new Map();
+
+
+        let rotationPointerId =
+            null;
+
+
+        let previousX =
+            0;
+
+
+        let previousY =
+            0;
+
+
+        let isRotating =
+            false;
+
+
+
+        /* =====================================================
+           PINCH STATE
+           ===================================================== */
+
+        let pinchStartDistance =
+            null;
+
+
+        let pinchStartScale =
+            1;
+
+
+
+        function getPinchDistance() {
+
+
+            if (
+                pointers.size !== 2
+            ) {
+
+                return null;
+
+            }
+
+
+            const values =
+                Array.from(
+                    pointers.values()
+                );
+
+
+            const a =
+                values[0];
+
+
+            const b =
+                values[1];
+
+
+            const dx =
+                a.x -
+                b.x;
+
+
+            const dy =
+                a.y -
+                b.y;
+
+
+            return Math.sqrt(
+                dx * dx +
+                dy * dy
             );
 
         }
-        else {
 
-            appleOrientation.object3D.quaternion.identity();
+
+
+        function updatePinch() {
+
+
+            const distance =
+                getPinchDistance();
+
+
+            if (
+                distance === null
+            ) {
+
+                pinchStartDistance =
+                    null;
+
+                return;
+
+            }
+
+
+            if (
+                pinchStartDistance ===
+                null
+            ) {
+
+                pinchStartDistance =
+                    distance;
+
+
+                pinchStartScale =
+                    apple
+                        .object3D
+                        .scale
+                        .x;
+
+                return;
+
+            }
+
+
+            let scale =
+                pinchStartScale *
+                (
+                    distance /
+                    pinchStartDistance
+                );
+
+
+            scale =
+                THREE.MathUtils.clamp(
+                    scale,
+                    0.3,
+                    3.0
+                );
+
+
+            apple.object3D.scale.set(
+                scale,
+                scale,
+                scale
+            );
 
         }
-    }
 
 
-    /* =========================================================
-       USER ROTATION
-       =========================================================
 
-       User rotation remains completely independent
-       from MindAR target orientation.
-    */
+        /* =====================================================
+           POINTER DOWN
+           ===================================================== */
 
-
-    let rotationX = 0;
-
-    let rotationY = 0;
-
-
-    const ROTATION_SPEED = 0.010;
-
-
-    function rotateApple(deltaX, deltaY) {
-
-        if (
-            Math.abs(deltaX) < 0.001 &&
-            Math.abs(deltaY) < 0.001
+        function pointerDown(
+            event
         ) {
-            return;
+
+
+            if (
+                !targetIsTracked
+            ) {
+                return;
+            }
+
+
+            pointers.set(
+                event.pointerId,
+                {
+                    x:
+                        event.clientX,
+
+                    y:
+                        event.clientY
+                }
+            );
+
+
+            if (
+                pointers.size === 1
+            ) {
+
+
+                rotationPointerId =
+                    event.pointerId;
+
+
+                previousX =
+                    event.clientX;
+
+
+                previousY =
+                    event.clientY;
+
+
+                isRotating =
+                    true;
+
+
+            }
+            else {
+
+
+                isRotating =
+                    false;
+
+
+                rotationPointerId =
+                    null;
+
+
+                pinchStartDistance =
+                    null;
+
+            }
+
+
+            try {
+
+                event.target.setPointerCapture(
+                    event.pointerId
+                );
+
+            }
+            catch (error) {}
+
+
+            event.preventDefault();
+
         }
 
 
-        /*
-        ---------------------------------------------------------
-        HORIZONTAL
-        ---------------------------------------------------------
 
-        Finger RIGHT:
-            Apple rotates RIGHT
+        /* =====================================================
+           POINTER MOVE
+           ===================================================== */
 
-        Finger LEFT:
-            Apple rotates LEFT
-        ---------------------------------------------------------
-        */
-
-        rotationY +=
-            deltaX * ROTATION_SPEED;
+        function pointerMove(
+            event
+        ) {
 
 
-        /*
-        ---------------------------------------------------------
-        VERTICAL
-        ---------------------------------------------------------
-
-        Finger UP:
-            Apple rotates UP
-
-        Finger DOWN:
-            Apple rotates DOWN
-        ---------------------------------------------------------
-        */
-
-        rotationX +=
-            deltaY * ROTATION_SPEED;
+            if (
+                !targetIsTracked
+            ) {
+                return;
+            }
 
 
-        /*
-            Prevent unlimited floating-point growth.
-        */
+            if (
+                !pointers.has(
+                    event.pointerId
+                )
+            ) {
+                return;
+            }
 
-        if (rotationX > Math.PI * 2) {
-            rotationX -= Math.PI * 2;
+
+            pointers.set(
+                event.pointerId,
+                {
+                    x:
+                        event.clientX,
+
+                    y:
+                        event.clientY
+                }
+            );
+
+
+
+            if (
+                pointers.size === 1 &&
+                isRotating &&
+                rotationPointerId ===
+                event.pointerId
+            ) {
+
+
+                const deltaX =
+                    event.clientX -
+                    previousX;
+
+
+                const deltaY =
+                    event.clientY -
+                    previousY;
+
+
+                rotateApple(
+                    deltaX,
+                    deltaY
+                );
+
+
+                previousX =
+                    event.clientX;
+
+
+                previousY =
+                    event.clientY;
+
+
+            }
+            else if (
+                pointers.size === 2
+            ) {
+
+
+                isRotating =
+                    false;
+
+
+                updatePinch();
+
+            }
+
+
+            event.preventDefault();
+
         }
 
-        if (rotationX < -Math.PI * 2) {
-            rotationX += Math.PI * 2;
+
+
+        /* =====================================================
+           POINTER UP
+           ===================================================== */
+
+        function pointerUp(
+            event
+        ) {
+
+
+            pointers.delete(
+                event.pointerId
+            );
+
+
+            if (
+                rotationPointerId ===
+                event.pointerId
+            ) {
+
+                rotationPointerId =
+                    null;
+
+                isRotating =
+                    false;
+
+            }
+
+
+            if (
+                pointers.size < 2
+            ) {
+
+                pinchStartDistance =
+                    null;
+
+            }
+
+
+            event.preventDefault();
+
         }
 
-        if (rotationY > Math.PI * 2) {
-            rotationY -= Math.PI * 2;
+
+
+        /* =====================================================
+           POINTER CANCEL
+           ===================================================== */
+
+        function pointerCancel(
+            event
+        ) {
+
+
+            pointers.delete(
+                event.pointerId
+            );
+
+
+            if (
+                rotationPointerId ===
+                event.pointerId
+            ) {
+
+                rotationPointerId =
+                    null;
+
+                isRotating =
+                    false;
+
+            }
+
+
+            if (
+                pointers.size < 2
+            ) {
+
+                pinchStartDistance =
+                    null;
+
+            }
+
         }
 
-        if (rotationY < -Math.PI * 2) {
-            rotationY += Math.PI * 2;
+
+
+        /* =====================================================
+           TARGET FOUND
+           ===================================================== */
+
+        target.addEventListener(
+            "targetFound",
+            function () {
+
+
+                targetIsTracked =
+                    true;
+
+
+                /*
+                    IMPORTANT:
+
+                    Start locked.
+
+                    We don't immediately trust
+                    the first few frames of tracking.
+                */
+
+                poseLocked =
+                    true;
+
+
+                stableTracking =
+                    false;
+
+
+                stableFrames =
+                    0;
+
+
+                pendingMode =
+                    currentMode;
+
+
+                modeConfirmFrames =
+                    0;
+
+
+                /*
+                    Apple becomes visible immediately,
+                    but its LAST GOOD pose is preserved.
+                */
+
+                apple.setAttribute(
+                    "visible",
+                    true
+                );
+
+
+                pointers.clear();
+
+
+                rotationPointerId =
+                    null;
+
+
+                isRotating =
+                    false;
+
+
+                pinchStartDistance =
+                    null;
+
+            }
+        );
+
+
+
+        /* =====================================================
+           TARGET LOST
+           ===================================================== */
+
+        target.addEventListener(
+            "targetLost",
+            function () {
+
+
+                /*
+                    THIS IS THE MOST IMPORTANT PART.
+
+                    Immediately lock the Apple.
+
+                    From this point forward,
+                    MindAR cannot change its
+                    orientation through our code.
+                */
+
+                poseLocked =
+                    true;
+
+
+                stableTracking =
+                    false;
+
+
+                stableFrames =
+                    0;
+
+
+                targetIsTracked =
+                    false;
+
+
+                /*
+                    Hide the Apple.
+
+                    Its exact rotation,
+                    scale,
+                    floor mode and user
+                    rotation remain untouched.
+                */
+
+                apple.setAttribute(
+                    "visible",
+                    false
+                );
+
+
+                pointers.clear();
+
+
+                rotationPointerId =
+                    null;
+
+
+                isRotating =
+                    false;
+
+
+                pinchStartDistance =
+                    null;
+
+            }
+        );
+
+
+
+        /* =====================================================
+           POINTER EVENT SETUP
+           ===================================================== */
+
+        function setupPointerEvents() {
+
+
+            const canvas =
+                scene.canvas ||
+                document.querySelector(
+                    "canvas"
+                );
+
+
+            if (!canvas) {
+
+                requestAnimationFrame(
+                    setupPointerEvents
+                );
+
+                return;
+
+            }
+
+
+            canvas.style.touchAction =
+                "none";
+
+
+            canvas.addEventListener(
+                "pointerdown",
+                pointerDown,
+                {
+                    passive: false
+                }
+            );
+
+
+            canvas.addEventListener(
+                "pointermove",
+                pointerMove,
+                {
+                    passive: false
+                }
+            );
+
+
+            canvas.addEventListener(
+                "pointerup",
+                pointerUp,
+                {
+                    passive: false
+                }
+            );
+
+
+            canvas.addEventListener(
+                "pointercancel",
+                pointerCancel,
+                {
+                    passive: false
+                }
+            );
+
+
+            canvas.addEventListener(
+                "contextmenu",
+                function (event) {
+
+                    event.preventDefault();
+
+                },
+                {
+                    passive: false
+                }
+            );
+
         }
+
+
+
+        /* =====================================================
+           AR LOOP
+           ===================================================== */
+
+        function updateAR() {
+
+
+            /*
+                -------------------------------------------------
+                STABLE-POSE GATE
+                -------------------------------------------------
+
+                MindAR may report targetFound before
+                the pose is completely stable.
+
+                We wait for several frames before allowing
+                the target to influence the Apple.
+            */
+
+            if (
+                targetIsTracked &&
+                poseLocked
+            ) {
+
+
+                stableFrames++;
+
+
+                if (
+                    stableFrames >=
+                    REQUIRED_STABLE_FRAMES
+                ) {
+
+
+                    /*
+                        Now tracking is considered
+                        stable enough to update.
+                    */
+
+                    stableTracking =
+                        true;
+
+
+                    poseLocked =
+                        false;
+
+
+                    /*
+                        Capture the mode only now.
+                    */
+
+                    pendingMode =
+                        currentMode;
+
+
+                    modeConfirmFrames =
+                        0;
+
+                }
+
+            }
+
+
+
+            /*
+                Only update target orientation when
+                the tracking gate is open.
+            */
+
+            if (
+                targetIsTracked &&
+                stableTracking &&
+                !poseLocked
+            ) {
+
+                updateTargetMode();
+
+                applyTargetOrientation();
+
+            }
+
+
+
+            requestAnimationFrame(
+                updateAR
+            );
+
+        }
+
+
+
+        /* =====================================================
+           START
+           ===================================================== */
+
+        scene.addEventListener(
+            "loaded",
+            function () {
+
+                setupPointerEvents();
+
+            }
+        );
 
 
         applyUserRotation();
-    }
 
 
-    function applyUserRotation() {
-
-        appleRotation.object3D.rotation.x =
-            rotationX;
-
-        appleRotation.object3D.rotation.y =
-            rotationY;
-
-        appleRotation.object3D.rotation.z =
-            0;
-    }
-
-
-    /* =========================================================
-       POINTER STATE
-       ========================================================= */
-
-    const pointers =
-        new Map();
-
-
-    let rotationPointerId =
-        null;
-
-
-    let previousX =
-        0;
-
-
-    let previousY =
-        0;
-
-
-    let isRotating =
-        false;
-
-
-    /* =========================================================
-       PINCH STATE
-       ========================================================= */
-
-    let pinchStartDistance =
-        null;
-
-
-    let pinchStartScale =
-        1;
-
-
-    function getPinchDistance() {
-
-        if (pointers.size !== 2) {
-            return null;
-        }
-
-
-        const values =
-            Array.from(
-                pointers.values()
-            );
-
-
-        const a =
-            values[0];
-
-
-        const b =
-            values[1];
-
-
-        const dx =
-            a.x - b.x;
-
-
-        const dy =
-            a.y - b.y;
-
-
-        return Math.sqrt(
-            dx * dx +
-            dy * dy
+        apple.setAttribute(
+            "visible",
+            false
         );
-    }
-
-
-    function updatePinch() {
-
-        const distance =
-            getPinchDistance();
-
-
-        if (distance === null) {
-
-            pinchStartDistance =
-                null;
-
-            return;
-        }
-
-
-        if (pinchStartDistance === null) {
-
-            pinchStartDistance =
-                distance;
-
-
-            pinchStartScale =
-                apple.object3D.scale.x;
-
-
-            return;
-        }
-
-
-        if (pinchStartDistance <= 0) {
-            return;
-        }
-
-
-        let scale =
-            pinchStartScale *
-            (
-                distance /
-                pinchStartDistance
-            );
-
-
-        scale =
-            THREE.MathUtils.clamp(
-                scale,
-                0.3,
-                3.0
-            );
-
-
-        apple.object3D.scale.set(
-            scale,
-            scale,
-            scale
-        );
-    }
-
-
-    /* =========================================================
-       POINTER DOWN
-       ========================================================= */
-
-    function pointerDown(event) {
-
-        /*
-            Ignore interaction while the target is not
-            currently tracked.
-        */
-
-        if (!targetIsTracked) {
-            return;
-        }
-
-
-        pointers.set(
-            event.pointerId,
-            {
-                x: event.clientX,
-                y: event.clientY
-            }
-        );
-
-
-        /*
-            One finger = rotation.
-        */
-
-        if (pointers.size === 1) {
-
-            rotationPointerId =
-                event.pointerId;
-
-
-            previousX =
-                event.clientX;
-
-
-            previousY =
-                event.clientY;
-
-
-            isRotating =
-                true;
-
-        }
-        else {
-
-            /*
-                Two fingers = pinch.
-            */
-
-            isRotating =
-                false;
-
-
-            rotationPointerId =
-                null;
-
-
-            pinchStartDistance =
-                null;
-        }
-
-
-        try {
-
-            event.target.setPointerCapture(
-                event.pointerId
-            );
-
-        }
-        catch (error) {}
-
-
-        event.preventDefault();
-    }
-
-
-    /* =========================================================
-       POINTER MOVE
-       ========================================================= */
-
-    function pointerMove(event) {
-
-        if (
-            !targetIsTracked
-        ) {
-            return;
-        }
-
-
-        if (
-            !pointers.has(
-                event.pointerId
-            )
-        ) {
-            return;
-        }
-
-
-        pointers.set(
-            event.pointerId,
-            {
-                x: event.clientX,
-                y: event.clientY
-            }
-        );
-
-
-        /* -----------------------------------------------------
-           ONE FINGER = ROTATION
-           ----------------------------------------------------- */
-
-        if (
-            pointers.size === 1 &&
-            isRotating &&
-            rotationPointerId ===
-            event.pointerId
-        ) {
-
-            const deltaX =
-                event.clientX -
-                previousX;
-
-
-            const deltaY =
-                event.clientY -
-                previousY;
-
-
-            rotateApple(
-                deltaX,
-                deltaY
-            );
-
-
-            previousX =
-                event.clientX;
-
-
-            previousY =
-                event.clientY;
-        }
-
-
-        /* -----------------------------------------------------
-           TWO FINGERS = PINCH
-           ----------------------------------------------------- */
-
-        else if (
-            pointers.size === 2
-        ) {
-
-            isRotating =
-                false;
-
-
-            updatePinch();
-        }
-
-
-        event.preventDefault();
-    }
-
-
-    /* =========================================================
-       POINTER UP
-       ========================================================= */
-
-    function pointerUp(event) {
-
-        pointers.delete(
-            event.pointerId
-        );
-
-
-        if (
-            rotationPointerId ===
-            event.pointerId
-        ) {
-
-            rotationPointerId =
-                null;
-
-
-            isRotating =
-                false;
-        }
-
-
-        if (pointers.size < 2) {
-
-            pinchStartDistance =
-                null;
-        }
-
-
-        event.preventDefault();
-    }
-
-
-    /* =========================================================
-       POINTER CANCEL
-       ========================================================= */
-
-    function pointerCancel(event) {
-
-        pointers.delete(
-            event.pointerId
-        );
-
-
-        if (
-            rotationPointerId ===
-            event.pointerId
-        ) {
-
-            rotationPointerId =
-                null;
-
-
-            isRotating =
-                false;
-        }
-
-
-        if (pointers.size < 2) {
-
-            pinchStartDistance =
-                null;
-        }
-    }
-
-
-    /* =========================================================
-       TARGET FOUND
-       ========================================================= */
-
-    target.addEventListener(
-        "targetFound",
-        function () {
-
-            /*
-                MindAR has found the page again.
-
-                Resume tracking immediately.
-            */
-
-            targetIsTracked =
-                true;
-
-
-            allowTargetUpdates =
-                true;
-
-
-            /*
-                Reset the mode detection buffer so the
-                newly detected page can establish whether
-                it is horizontal or vertical.
-            */
-
-            pendingMode =
-                currentMode;
-
-            modeConfirmFrames =
-                0;
-
-
-            /*
-                Make the apple visible immediately.
-
-                Its user rotation and scale have NOT been
-                reset.
-            */
-
-            apple.setAttribute(
-                "visible",
-                true
-            );
-
-
-            /*
-                Clear any pointer state left over from
-                when the camera moved away.
-            */
-
-            pointers.clear();
-
-            rotationPointerId =
-                null;
-
-            isRotating =
-                false;
-
-            pinchStartDistance =
-                null;
-
-        }
-    );
-
-
-    /* =========================================================
-       TARGET LOST
-       ========================================================= */
-
-    target.addEventListener(
-        "targetLost",
-        function () {
-
-            /*
-                Stop accepting tracking updates.
-
-                This is what prevents the weird rotation
-                while MindAR is searching.
-            */
-
-            targetIsTracked =
-                false;
-
-
-            allowTargetUpdates =
-                false;
-
-
-            /*
-                Hide the apple.
-
-                IMPORTANT:
-
-                We do NOT reset:
-
-                    rotationX
-                    rotationY
-                    scale
-                    currentMode
-
-                Therefore the user's interaction state
-                is preserved.
-            */
-
-            apple.setAttribute(
-                "visible",
-                false
-            );
-
-
-            /*
-                Clear pointer state so a finger movement
-                during target loss cannot rotate the apple.
-            */
-
-            pointers.clear();
-
-            rotationPointerId =
-                null;
-
-            isRotating =
-                false;
-
-            pinchStartDistance =
-                null;
-
-        }
-    );
-
-
-    /* =========================================================
-       SETUP POINTER EVENTS
-       ========================================================= */
-
-    function setupPointerEvents() {
-
-        const canvas =
-            scene.canvas ||
-            document.querySelector(
-                "canvas"
-            );
-
-
-        if (!canvas) {
-
-            requestAnimationFrame(
-                setupPointerEvents
-            );
-
-            return;
-        }
-
-
-        canvas.style.touchAction =
-            "none";
-
-
-        canvas.addEventListener(
-            "pointerdown",
-            pointerDown,
-            {
-                passive: false
-            }
-        );
-
-
-        canvas.addEventListener(
-            "pointermove",
-            pointerMove,
-            {
-                passive: false
-            }
-        );
-
-
-        canvas.addEventListener(
-            "pointerup",
-            pointerUp,
-            {
-                passive: false
-            }
-        );
-
-
-        canvas.addEventListener(
-            "pointercancel",
-            pointerCancel,
-            {
-                passive: false
-            }
-        );
-
-
-        canvas.addEventListener(
-            "contextmenu",
-            function (event) {
-
-                event.preventDefault();
-
-            },
-            {
-                passive: false
-            }
-        );
-    }
-
-
-    /* =========================================================
-       AR LOOP
-       ========================================================= */
-
-    function updateAR() {
-
-        /*
-            ONLY update the target orientation while
-            MindAR confirms that the image is currently
-            tracked.
-
-            When targetLost happens, this completely stops.
-
-            Therefore the apple cannot receive unstable
-            orientation data while the camera is away.
-        */
-
-        if (
-            targetIsTracked &&
-            allowTargetUpdates
-        ) {
-
-            updateTargetMode();
-
-            applyTargetOrientation();
-
-        }
 
 
         requestAnimationFrame(
             updateAR
         );
+
+
     }
 
-
-    /* =========================================================
-       START
-       ========================================================= */
-
-    scene.addEventListener(
-        "loaded",
-        function () {
-
-            setupPointerEvents();
-
-        }
-    );
-
-
-    /*
-        Start with identity user rotation.
-    */
-
-    applyUserRotation();
-
-
-    /*
-        Start hidden until MindAR actually detects
-        the image target.
-
-        This prevents the apple from appearing before
-        the page has been recognized.
-    */
-
-    apple.setAttribute(
-        "visible",
-        false
-    );
-
-
-    requestAnimationFrame(
-        updateAR
-    );
-
-});
+);
 
 </script>
 
