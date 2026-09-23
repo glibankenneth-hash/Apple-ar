@@ -20,7 +20,7 @@
 
 
 <!-- =========================================================
-     MINDAR IMAGE TRACKING
+     MINDAR
      ========================================================= -->
 
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
@@ -43,25 +43,85 @@ body {
 
     overflow: hidden;
 
-    background: black;
+    background: transparent;
 
 }
+
+
+/* =========================================================
+   MINDAR CAMERA VIDEO
+   ========================================================= */
+
+video {
+
+    position: fixed !important;
+
+    top: 0 !important;
+    left: 0 !important;
+
+    width: 100vw !important;
+    height: 100vh !important;
+
+    object-fit: cover !important;
+
+    z-index: 0 !important;
+
+    display: block !important;
+
+    visibility: visible !important;
+
+    opacity: 1 !important;
+
+}
+
+
+/* =========================================================
+   A-FRAME
+   ========================================================= */
 
 a-scene {
 
-    width: 100%;
-    height: 100%;
+    position: fixed !important;
+
+    top: 0;
+    left: 0;
+
+    width: 100vw !important;
+    height: 100vh !important;
+
+    z-index: 1 !important;
+
+    background: transparent !important;
 
 }
 
+
+/* =========================================================
+   A-FRAME CANVAS
+   ========================================================= */
+
 canvas {
+
+    position: fixed !important;
+
+    top: 0 !important;
+    left: 0 !important;
+
+    width: 100vw !important;
+    height: 100vh !important;
+
+    background: transparent !important;
+
+    z-index: 1 !important;
 
     touch-action: none !important;
 
 }
 
 
-/* Hide MindAR UI */
+/* =========================================================
+   HIDE MINDAR UI
+   ========================================================= */
 
 .mindar-ui-loading,
 .mindar-ui-scanning,
@@ -108,6 +168,7 @@ canvas {
     renderer="
         colorManagement: true;
         antialias: true;
+        alpha: true;
     "
 
     vr-mode-ui="enabled: false"
@@ -148,8 +209,8 @@ canvas {
 
 
 <!-- =========================================================
-     APPLE TARGET
-     Target Index 0
+     APPLE
+     TARGET INDEX 0
      ========================================================= -->
 
 <a-entity
@@ -185,8 +246,8 @@ canvas {
 
 
 <!-- =========================================================
-     BALL TARGET
-     Target Index 1
+     BALL
+     TARGET INDEX 1
      ========================================================= -->
 
 <a-entity
@@ -237,6 +298,9 @@ const THREE = AFRAME.THREE;
    ELEMENTS
    ========================================================= */
 
+const scene =
+    document.querySelector("a-scene");
+
 const appleTarget =
     document.querySelector("#appleTarget");
 
@@ -264,10 +328,6 @@ const ball =
 
 /* =========================================================
    ACTIVE TARGET
-
-   0 = Apple
-   1 = Ball
-   null = Nothing
    ========================================================= */
 
 let activeTarget = null;
@@ -275,9 +335,6 @@ let activeTarget = null;
 
 /* =========================================================
    FLOOR CORRECTION
-
-   Makes the object stand upright when
-   the target page is lying flat.
    ========================================================= */
 
 const FLOOR_CORRECTION =
@@ -294,9 +351,7 @@ const FLOOR_CORRECTION =
 
 
 /* =========================================================
-   IDENTITY ROTATION
-
-   Used when the page is vertical.
+   IDENTITY
    ========================================================= */
 
 const IDENTITY =
@@ -304,10 +359,127 @@ const IDENTITY =
 
 
 /* =========================================================
-   APPLY ORIENTATION
+   CAMERA VIDEO FIX
+   =========================================================
+
+   MindAR creates the camera video dynamically.
+
+   We force the video element to remain visible
+   and behind the transparent A-Frame canvas.
    ========================================================= */
 
-function applyOrientation(target, orientation) {
+function fixCameraVideo() {
+
+    const videos =
+        document.querySelectorAll("video");
+
+
+    videos.forEach(function(video) {
+
+        video.style.position = "fixed";
+
+        video.style.top = "0px";
+
+        video.style.left = "0px";
+
+        video.style.width = "100vw";
+
+        video.style.height = "100vh";
+
+        video.style.objectFit = "cover";
+
+        video.style.zIndex = "0";
+
+        video.style.display = "block";
+
+        video.style.visibility = "visible";
+
+        video.style.opacity = "1";
+
+    });
+
+
+    const canvas =
+        document.querySelector("canvas");
+
+
+    if (canvas) {
+
+        canvas.style.position = "fixed";
+
+        canvas.style.top = "0px";
+
+        canvas.style.left = "0px";
+
+        canvas.style.width = "100vw";
+
+        canvas.style.height = "100vh";
+
+        canvas.style.zIndex = "1";
+
+        canvas.style.background = "transparent";
+
+    }
+
+}
+
+
+/* =========================================================
+   RUN CAMERA FIX
+   ========================================================= */
+
+setTimeout(
+    fixCameraVideo,
+    100
+);
+
+setTimeout(
+    fixCameraVideo,
+    500
+);
+
+setTimeout(
+    fixCameraVideo,
+    1000
+);
+
+setTimeout(
+    fixCameraVideo,
+    2000
+);
+
+
+/* =========================================================
+   OBSERVE NEW VIDEO ELEMENTS
+   ========================================================= */
+
+const observer =
+    new MutationObserver(
+        function() {
+
+            fixCameraVideo();
+
+        }
+    );
+
+
+observer.observe(
+    document.body,
+    {
+        childList: true,
+        subtree: true
+    }
+);
+
+
+/* =========================================================
+   ORIENTATION
+   ========================================================= */
+
+function applyOrientation(
+    target,
+    orientation
+) {
 
     if (!target || !orientation) {
         return;
@@ -315,21 +487,17 @@ function applyOrientation(target, orientation) {
 
 
     const normal =
-        new THREE.Vector3(0, 0, 1);
+        new THREE.Vector3(
+            0,
+            0,
+            1
+        );
 
 
     normal.applyQuaternion(
         target.object3D.quaternion
     );
 
-
-    /*
-        Vertical page:
-        keep normal orientation.
-
-        Horizontal page:
-        apply floor correction.
-    */
 
     const isVertical =
         Math.abs(normal.y) < 0.5;
@@ -358,16 +526,8 @@ function applyOrientation(target, orientation) {
 
 function activateApple() {
 
-    /*
-        Apple becomes active immediately.
-    */
-
     activeTarget = 0;
 
-
-    /*
-        Hide Ball immediately.
-    */
 
     ball.setAttribute(
         "visible",
@@ -375,19 +535,11 @@ function activateApple() {
     );
 
 
-    /*
-        Show Apple immediately.
-    */
-
     apple.setAttribute(
         "visible",
         true
     );
 
-
-    /*
-        Apply correct orientation.
-    */
 
     applyOrientation(
         appleTarget,
@@ -403,16 +555,8 @@ function activateApple() {
 
 function activateBall() {
 
-    /*
-        Ball becomes active immediately.
-    */
-
     activeTarget = 1;
 
-
-    /*
-        Hide Apple immediately.
-    */
 
     apple.setAttribute(
         "visible",
@@ -420,19 +564,11 @@ function activateBall() {
     );
 
 
-    /*
-        Show Ball immediately.
-    */
-
     ball.setAttribute(
         "visible",
         true
     );
 
-
-    /*
-        Apply correct orientation.
-    */
 
     applyOrientation(
         ballTarget,
@@ -443,18 +579,12 @@ function activateBall() {
 
 
 /* =========================================================
-   APPLE FOUND
+   TARGET FOUND
    ========================================================= */
 
 appleTarget.addEventListener(
     "targetFound",
-    function () {
-
-        /*
-            NO WAITING.
-            NO FRAME DELAY.
-            Switch immediately.
-        */
+    function() {
 
         activateApple();
 
@@ -462,19 +592,9 @@ appleTarget.addEventListener(
 );
 
 
-/* =========================================================
-   BALL FOUND
-   ========================================================= */
-
 ballTarget.addEventListener(
     "targetFound",
-    function () {
-
-        /*
-            NO WAITING.
-            NO FRAME DELAY.
-            Switch immediately.
-        */
+    function() {
 
         activateBall();
 
@@ -483,20 +603,12 @@ ballTarget.addEventListener(
 
 
 /* =========================================================
-   APPLE LOST
+   TARGET LOST
    ========================================================= */
 
 appleTarget.addEventListener(
     "targetLost",
-    function () {
-
-        /*
-            Important:
-
-            If Ball was already found,
-            do NOT let Apple's targetLost
-            event hide the Ball.
-        */
+    function() {
 
         if (activeTarget === 0) {
 
@@ -513,19 +625,9 @@ appleTarget.addEventListener(
 );
 
 
-/* =========================================================
-   BALL LOST
-   ========================================================= */
-
 ballTarget.addEventListener(
     "targetLost",
-    function () {
-
-        /*
-            If Apple was already found,
-            do NOT let Ball's targetLost
-            event hide the Apple.
-        */
+    function() {
 
         if (activeTarget === 1) {
 
@@ -543,7 +645,7 @@ ballTarget.addEventListener(
 
 
 /* =========================================================
-   CONTINUOUS ORIENTATION UPDATE
+   ORIENTATION LOOP
    ========================================================= */
 
 function orientationLoop() {
@@ -579,12 +681,8 @@ orientationLoop();
 
 
 /* =========================================================
-   TOUCH / POINTER CONTROL
+   POINTER CONTROL
    ========================================================= */
-
-const scene =
-    document.querySelector("a-scene");
-
 
 let pointerDown = false;
 
@@ -594,7 +692,7 @@ let lastY = 0;
 
 
 /* =========================================================
-   PINCH VARIABLES
+   PINCH
    ========================================================= */
 
 let pinchActive = false;
@@ -605,7 +703,7 @@ let initialScale = 4.54545;
 
 
 /* =========================================================
-   GET ACTIVE ROTATION
+   ACTIVE ROTATION
    ========================================================= */
 
 function getActiveRotation() {
@@ -630,7 +728,7 @@ function getActiveRotation() {
 
 
 /* =========================================================
-   GET ACTIVE MODEL
+   ACTIVE MODEL
    ========================================================= */
 
 function getActiveModel() {
@@ -660,13 +758,15 @@ function getActiveModel() {
 
 scene.addEventListener(
     "pointerdown",
-    function (event) {
+    function(event) {
 
         pointerDown = true;
 
-        lastX = event.clientX;
+        lastX =
+            event.clientX;
 
-        lastY = event.clientY;
+        lastY =
+            event.clientY;
 
     }
 );
@@ -678,7 +778,7 @@ scene.addEventListener(
 
 scene.addEventListener(
     "pointermove",
-    function (event) {
+    function(event) {
 
         if (!pointerDown) {
             return;
@@ -700,34 +800,28 @@ scene.addEventListener(
 
 
         const deltaX =
-            event.clientX - lastX;
+            event.clientX -
+            lastX;
 
 
         const deltaY =
-            event.clientY - lastY;
+            event.clientY -
+            lastY;
 
-
-        /*
-            Horizontal finger movement
-            rotates around Y.
-        */
 
         rotation.object3D.rotation.y
             += deltaX * 0.01;
 
 
-        /*
-            Vertical finger movement
-            rotates around X.
-        */
-
         rotation.object3D.rotation.x
             += deltaY * 0.01;
 
 
-        lastX = event.clientX;
+        lastX =
+            event.clientX;
 
-        lastY = event.clientY;
+        lastY =
+            event.clientY;
 
     }
 );
@@ -739,7 +833,7 @@ scene.addEventListener(
 
 scene.addEventListener(
     "pointerup",
-    function () {
+    function() {
 
         pointerDown = false;
 
@@ -749,7 +843,7 @@ scene.addEventListener(
 
 scene.addEventListener(
     "pointercancel",
-    function () {
+    function() {
 
         pointerDown = false;
 
@@ -790,7 +884,7 @@ function getTouchDistance(
 
 scene.addEventListener(
     "touchstart",
-    function (event) {
+    function(event) {
 
         if (event.touches.length === 2) {
 
@@ -833,7 +927,7 @@ scene.addEventListener(
 
 scene.addEventListener(
     "touchmove",
-    function (event) {
+    function(event) {
 
         if (
             event.touches.length === 2 &&
@@ -859,8 +953,12 @@ scene.addEventListener(
                 );
 
 
-            if (initialPinchDistance <= 0) {
+            if (
+                initialPinchDistance <= 0
+            ) {
+
                 return;
+
             }
 
 
@@ -872,14 +970,6 @@ scene.addEventListener(
             let newScale =
                 initialScale * ratio;
 
-
-            /*
-                Minimum scale:
-                0.3
-
-                Maximum scale:
-                15
-            */
 
             newScale =
                 Math.max(
@@ -912,7 +1002,7 @@ scene.addEventListener(
 
 scene.addEventListener(
     "touchend",
-    function (event) {
+    function(event) {
 
         if (event.touches.length < 2) {
 
@@ -925,12 +1015,12 @@ scene.addEventListener(
 
 
 /* =========================================================
-   PREVENT PAGE SCROLLING
+   PREVENT SCROLLING
    ========================================================= */
 
 document.addEventListener(
     "touchmove",
-    function (event) {
+    function(event) {
 
         if (event.touches.length > 0) {
 
