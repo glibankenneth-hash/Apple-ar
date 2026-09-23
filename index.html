@@ -92,25 +92,24 @@ canvas {
         uiError: no;
 
         /*
-            Faster page switching.
-
-            Lower values mean MindAR does not wait
-            as long before declaring a target lost.
+            FAST TARGET SWITCHING
         */
 
-        warmupTolerance: 3;
-        missTolerance: 2;
+        warmupTolerance: 1;
+        missTolerance: 1;
 
         /*
-            Keep tracking reasonably smooth.
+            REDUCED TRACKING DELAY
+
+            Higher filter values make tracking
+            respond faster to camera movement.
         */
 
-        filterMinCF: 0.0005;
-        filterBeta: 0.001;
+        filterMinCF: 0.01;
+        filterBeta: 5000;
 
         /*
-            Only one book page needs to be tracked
-            at a time.
+            Only one page is tracked at a time.
         */
 
         maxTrack: 1;
@@ -174,8 +173,16 @@ canvas {
 <!-- =========================================================
      PAGE A
      TARGET 0
-     PAGE A.jpg
      APPLE
+     
+     PHYSICAL PAGE:
+     21 cm wide
+
+     APPLE:
+     0.076 m = 7.6 cm
+
+     AR SCALE:
+     0.076 / 0.21 = 0.3619
      ========================================================= -->
 
 <a-entity
@@ -186,14 +193,10 @@ canvas {
 >
 
 
-    <!-- TARGET ORIENTATION -->
-
     <a-entity
         id="appleOrientation"
     >
 
-
-        <!-- USER ROTATION -->
 
         <a-entity
             id="appleRotation"
@@ -210,7 +213,7 @@ canvas {
 
                 rotation="0 0 0"
 
-                scale="1 1 1"
+                scale="0.3619 0.3619 0.3619"
 
                 visible="false"
 
@@ -228,8 +231,16 @@ canvas {
 <!-- =========================================================
      PAGE B
      TARGET 1
-     PAGE B.jpg
      BALL
+
+     PHYSICAL PAGE:
+     21 cm wide
+
+     BALL:
+     0.242 m = 24.2 cm
+
+     AR SCALE:
+     0.242 / 0.21 = 1.1524
      ========================================================= -->
 
 <a-entity
@@ -240,14 +251,10 @@ canvas {
 >
 
 
-    <!-- TARGET ORIENTATION -->
-
     <a-entity
         id="ballOrientation"
     >
 
-
-        <!-- USER ROTATION -->
 
         <a-entity
             id="ballRotation"
@@ -264,7 +271,7 @@ canvas {
 
                 rotation="0 0 0"
 
-                scale="1 1 1"
+                scale="1.1524 1.1524 1.1524"
 
                 visible="false"
 
@@ -370,9 +377,31 @@ document.addEventListener(
 
 
         /* =====================================================
-           ACTIVE TARGET
+           REAL-WORLD BASE SCALE
            =====================================================
 
+           Physical target width:
+           0.21 meters
+
+           Apple:
+           0.076 meters
+
+           Ball:
+           0.242 meters
+        */
+
+        const APPLE_BASE_SCALE =
+            0.3619;
+
+
+        const BALL_BASE_SCALE =
+            1.1524;
+
+
+
+        /* =====================================================
+           ACTIVE TARGET
+           
            -1 = nothing
             0 = Apple
             1 = Ball
@@ -380,6 +409,15 @@ document.addEventListener(
 
         let activeTarget =
             -1;
+
+
+
+        /* =====================================================
+           TRACKING STABILITY
+           ===================================================== */
+
+        const REQUIRED_STABLE_FRAMES =
+            2;
 
 
 
@@ -401,10 +439,6 @@ document.addEventListener(
 
         let appleStableFrames =
             0;
-
-
-        const REQUIRED_STABLE_FRAMES =
-            4;
 
 
 
@@ -672,7 +706,7 @@ document.addEventListener(
 
 
         /* =====================================================
-           GET PINCH DISTANCE
+           POINTERS
            ===================================================== */
 
         const pointers =
@@ -707,6 +741,10 @@ document.addEventListener(
             null;
 
 
+
+        /* =====================================================
+           GET PINCH DISTANCE
+           ===================================================== */
 
         function getPinchDistance() {
 
@@ -753,7 +791,7 @@ document.addEventListener(
 
 
         /* =====================================================
-           RESET TOUCH STATE
+           RESET POINTER STATE
            ===================================================== */
 
         function resetPointerState() {
@@ -777,7 +815,7 @@ document.addEventListener(
 
 
         /* =====================================================
-           PINCH
+           PINCH ZOOM
            ===================================================== */
 
         function updatePinch() {
@@ -800,10 +838,6 @@ document.addEventListener(
 
             }
 
-
-            /*
-                Determine which object is active.
-            */
 
             let object =
                 null;
@@ -865,11 +899,32 @@ document.addEventListener(
                 );
 
 
+            /*
+                Pinch range is relative to
+                the correct real-world size.
+            */
+
+            const baseScale =
+                pinchObject === apple
+                    ? APPLE_BASE_SCALE
+                    : BALL_BASE_SCALE;
+
+
+            const minScale =
+                baseScale *
+                0.3;
+
+
+            const maxScale =
+                baseScale *
+                3.0;
+
+
             scale =
                 THREE.MathUtils.clamp(
                     scale,
-                    0.3,
-                    3.0
+                    minScale,
+                    maxScale
                 );
 
 
@@ -890,7 +945,6 @@ document.addEventListener(
         function pointerDown(
             event
         ) {
-
 
             if (
                 activeTarget === -1
@@ -973,7 +1027,6 @@ document.addEventListener(
         function pointerMove(
             event
         ) {
-
 
             if (
                 activeTarget === -1
@@ -1422,7 +1475,7 @@ document.addEventListener(
 
 
             if (
-                appleModeConfirmFrames >= 12 &&
+                appleModeConfirmFrames >= 6 &&
                 appleCurrentMode !==
                 applePendingMode
             ) {
@@ -1482,7 +1535,7 @@ document.addEventListener(
 
 
             if (
-                ballModeConfirmFrames >= 12 &&
+                ballModeConfirmFrames >= 6 &&
                 ballCurrentMode !==
                 ballPendingMode
             ) {
@@ -1504,15 +1557,10 @@ document.addEventListener(
             "targetFound",
             function () {
 
-
                 console.log(
                     "APPLE TARGET FOUND - Target 0"
                 );
 
-
-                /*
-                    Apple is now active.
-                */
 
                 activeTarget =
                     0;
@@ -1543,7 +1591,7 @@ document.addEventListener(
 
 
                 /*
-                    Immediately hide Ball.
+                    Immediately disable Ball.
                 */
 
                 ballTracked =
@@ -1569,7 +1617,7 @@ document.addEventListener(
 
 
                 /*
-                    Show Apple.
+                    Immediately show Apple.
                 */
 
                 apple.setAttribute(
@@ -1592,7 +1640,6 @@ document.addEventListener(
         appleTarget.addEventListener(
             "targetLost",
             function () {
-
 
                 console.log(
                     "APPLE TARGET LOST - Target 0"
@@ -1622,13 +1669,8 @@ document.addEventListener(
 
 
                 /*
-                    IMPORTANT:
-
-                    Only clear activeTarget if
-                    Apple is actually the active target.
-
-                    This prevents an old Apple targetLost
-                    event from killing the Ball state.
+                    Only clear active target if
+                    Apple is still the active target.
                 */
 
                 if (
@@ -1655,15 +1697,10 @@ document.addEventListener(
             "targetFound",
             function () {
 
-
                 console.log(
                     "BALL TARGET FOUND - Target 1"
                 );
 
-
-                /*
-                    Ball is now active.
-                */
 
                 activeTarget =
                     1;
@@ -1694,7 +1731,7 @@ document.addEventListener(
 
 
                 /*
-                    Immediately hide Apple.
+                    Immediately disable Apple.
                 */
 
                 appleTracked =
@@ -1720,7 +1757,7 @@ document.addEventListener(
 
 
                 /*
-                    Show Ball.
+                    Immediately show Ball.
                 */
 
                 ball.setAttribute(
@@ -1743,7 +1780,6 @@ document.addEventListener(
         ballTarget.addEventListener(
             "targetLost",
             function () {
-
 
                 console.log(
                     "BALL TARGET LOST - Target 1"
@@ -1773,8 +1809,8 @@ document.addEventListener(
 
 
                 /*
-                    Only clear activeTarget if
-                    Ball is actually the active target.
+                    Only clear active target if
+                    Ball is still the active target.
                 */
 
                 if (
@@ -1798,7 +1834,6 @@ document.addEventListener(
            ===================================================== */
 
         function setupPointerEvents() {
-
 
             const canvas =
                 scene.canvas ||
