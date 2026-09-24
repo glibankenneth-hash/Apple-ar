@@ -2,12 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-
   <meta
     name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
   >
-
   <meta name="apple-mobile-web-app-capable" content="yes">
 
   <title>AR Children's Book</title>
@@ -15,7 +13,7 @@
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
-  <!-- MediaPipe: recognizes a hand and its palm landmarks -->
+  <!-- CPU mode avoids competing with MindAR's WebGL camera renderer -->
   <script type="module">
     import {
       FilesetResolver,
@@ -29,7 +27,7 @@
 
       return HandLandmarker.createFromOptions(vision, {
         baseOptions: {
-          delegate: "GPU",
+          delegate: "CPU",
           modelAssetPath:
             "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
         },
@@ -57,10 +55,15 @@
       position: fixed !important;
       inset: 0 !important;
       display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
       width: 100vw !important;
       height: 100vh !important;
+      min-width: 100vw !important;
+      min-height: 100vh !important;
       object-fit: cover !important;
       object-position: center !important;
+      pointer-events: none !important;
       z-index: 0 !important;
       background: #000 !important;
     }
@@ -161,7 +164,6 @@
       look-controls="enabled: false"
     ></a-camera>
 
-    <!-- Apple trigger -->
     <a-entity
       id="appleTarget"
       mindar-image-target="targetIndex: 0"
@@ -189,7 +191,6 @@
       </a-entity>
     </a-entity>
 
-    <!-- Ball trigger -->
     <a-entity
       id="ballTarget"
       mindar-image-target="targetIndex: 1"
@@ -250,6 +251,7 @@
       let handLandmarker = null;
       let handTrackingStarted = false;
       let lastVideoTime = -1;
+      let lastHandCheckTime = 0;
       let lastHandSeenTime = 0;
 
       const ballMaterialStates = new Map();
@@ -271,6 +273,7 @@
       const handLocalPosition = new THREE.Vector3();
       const handDirection = new THREE.Vector3();
       const handNdc = new THREE.Vector3();
+      const returnPosition = new THREE.Vector3(0, 0, 0);
 
       let lastAnimationTime = performance.now();
 
@@ -297,12 +300,7 @@
       function startBackgroundMusic() {
         if (!backgroundMusic.paused) return;
 
-        backgroundMusic.play().catch(() => {
-          /*
-            Mobile phones can block automatic audio.
-            The first screen tap retries it.
-          */
-        });
+        backgroundMusic.play().catch(() => {});
       }
 
       function clearAppleSoundTimer() {
@@ -315,7 +313,7 @@
       function scheduleAppleSound(delay = 2000) {
         clearAppleSoundTimer();
 
-        if (appleSoundPlayed || activeTarget !== 0) return;
+        if (activeTarget !== 0 || appleSoundPlayed) return;
 
         appleSoundTimer = setTimeout(() => {
           if (activeTarget !== 0 || appleSoundPlayed) return;
@@ -338,6 +336,12 @@
         }
       }
 
+      function forceTransparentCanvas() {
+        if (!scene.renderer) return;
+
+        scene.renderer.setClearColor(0x000000, 0);
+      }
+
       function placeMindARCameraVideo() {
         if (videoPlaced) return true;
 
@@ -357,22 +361,45 @@
 
         cameraVideo.play().catch(() => {});
 
+        forceTransparentCanvas();
+
         videoPlaced = true;
         hideStatus();
 
-        startHandTracking();
+        /*
+          Wait for MindAR to establish its camera background before
+          starting hand detection.
+        */
+        setTimeout(startHandTracking, 1200);
 
         return true;
       }
 
+      scene.addEventListener("renderstart", () => {
+        forceTransparentCanvas();
+      });
+
+      scene.addEventListener("arReady", () => {
+        showStatus("Point your camera at a book page…");
+        placeMindARCameraVideo();
+        startBackgroundMusic();
+      });
+
+      scene.addEventListener("arError", () => {
+        showStatus("Camera could not start. Open this page in Chrome or Safari.");
+      });
+
+      const cameraCheck = setInterval(() => {
+        if (placeMindARCameraVideo()) {
+          clearInterval(cameraCheck);
+        }
+      }, 250);
+
       async function startHandTracking() {
         if (handTrackingStarted) return;
 
-        /*
-          The MediaPipe module may still be downloading during page startup.
-        */
         if (!window.createHandLandmarker) {
-          setTimeout(startHandTracking, 300);
+          setTimeout(startHandTracking, 400);
           return;
         }
 
@@ -383,14 +410,35 @@
           handTrackingLoop();
         } catch (error) {
           handTrackingStarted = false;
-          console.warn("Hand tracking could not start.", error);
+          console.warn("Hand tracking unavailable.", error);
         }
       }
 
-      /*
-        The palm center is calculated from:
-        wrist, index-finger base, and little-finger base.
-      */
+      function getActiveTargetElement() {
+        if (activeTarget === 0) return appleTarget;
+        if (activeTarget === 1) return ballTarget;
+
+        return null;
+      }
+
+      function getActiveModelElement() {
+        if (activeTarget === 0) {
+          return appleIsSliced ? appleSlice : apple;
+        }
+
+        if (activeTarget === 1) {
+          return ball;
+        }
+
+        return null;
+      }
+
+      function getActiveModelObject() {
+        const activeModel = getActiveModelElement();
+
+        return activeModel ? activeModel.object3D : null;
+      }
+
       function updateHandPosition(landmarks) {
         const activeModel = getActiveModelElement();
         const activeTargetElement = getActiveTargetElement();
@@ -452,16 +500,24 @@
           "#mindar-camera-feed"
         );
 
+        const now = performance.now();
+
+        /*
+          CPU hand tracking runs about 15 times per second,
+          keeping the MindAR camera smooth.
+        */
         if (
           cameraVideo &&
           cameraVideo.readyState >= 2 &&
-          cameraVideo.currentTime !== lastVideoTime
+          cameraVideo.currentTime !== lastVideoTime &&
+          now - lastHandCheckTime > 66
         ) {
           lastVideoTime = cameraVideo.currentTime;
+          lastHandCheckTime = now;
 
           const result = handLandmarker.detectForVideo(
             cameraVideo,
-            performance.now()
+            now
           );
 
           if (result.landmarks && result.landmarks.length > 0) {
@@ -472,10 +528,6 @@
         requestAnimationFrame(handTrackingLoop);
       }
 
-      /*
-        Smoothly moves the object toward the hand in about 0.5 seconds.
-        When the hand disappears, it returns smoothly to position 0 0 0.
-      */
       function updateObjectHandFollow(deltaSeconds) {
         const activeModel = getActiveModelElement();
 
@@ -487,6 +539,10 @@
         const handIsVisible =
           performance.now() - lastHandSeenTime < 250;
 
+        /*
+          About 0.5 seconds for the object to reach the palm
+          or return to the image trigger.
+        */
         const smoothAmount = 1 - Math.exp(-8 * deltaSeconds);
 
         if (handIsVisible) {
@@ -496,7 +552,7 @@
           );
         } else {
           activeModel.object3D.position.lerp(
-            new THREE.Vector3(0, 0, 0),
+            returnPosition,
             smoothAmount
           );
         }
@@ -709,38 +765,11 @@
         ).length > 0;
       }
 
-      function getActiveTargetElement() {
-        if (activeTarget === 0) return appleTarget;
-        if (activeTarget === 1) return ballTarget;
-
-        return null;
-      }
-
-      function getActiveModelElement() {
-        if (activeTarget === 0) {
-          return appleIsSliced
-            ? appleSlice
-            : apple;
-        }
-
-        if (activeTarget === 1) {
-          return ball;
-        }
-
-        return null;
-      }
-
       function getActiveRotationObject() {
         if (activeTarget === 0) return appleRotation.object3D;
         if (activeTarget === 1) return ballRotation.object3D;
 
         return null;
-      }
-
-      function getActiveModelObject() {
-        const element = getActiveModelElement();
-
-        return element ? element.object3D : null;
       }
 
       ball.addEventListener("model-loaded", () => {
