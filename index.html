@@ -2,12 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-
   <meta
     name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
   >
-
   <meta name="apple-mobile-web-app-capable" content="yes">
 
   <title>AR Children's Book</title>
@@ -16,8 +14,7 @@
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
   <style>
-    html,
-    body {
+    html, body {
       margin: 0;
       padding: 0;
       width: 100%;
@@ -52,10 +49,10 @@
       touch-action: none !important;
     }
 
-    #ar-status,
-    #sound-unlock {
+    #ar-status {
       position: fixed;
       left: 50%;
+      bottom: 24px;
       z-index: 10;
       transform: translateX(-50%);
       padding: 10px 15px;
@@ -68,16 +65,7 @@
       pointer-events: none;
     }
 
-    #ar-status {
-      bottom: 24px;
-    }
-
-    #sound-unlock {
-      top: 24px;
-    }
-
-    #ar-status.hidden,
-    #sound-unlock.hidden {
+    #ar-status.hidden {
       display: none;
     }
 
@@ -91,7 +79,6 @@
 
 <body>
   <div id="ar-status">Starting camera…</div>
-  <div id="sound-unlock">Tap screen to enable sound</div>
 
   <audio id="sliceSound" src="./Slice.mp3" preload="auto"></audio>
   <audio id="appleSound" src="./Apple.mp3" preload="auto"></audio>
@@ -100,6 +87,7 @@
     id="backgroundMusic"
     src="./Curious Discovery.mp3"
     preload="auto"
+    autoplay
     loop
   ></audio>
 
@@ -195,7 +183,6 @@
 
       const scene = document.querySelector("a-scene");
       const status = document.querySelector("#ar-status");
-      const soundUnlock = document.querySelector("#sound-unlock");
 
       const appleTarget = document.querySelector("#appleTarget");
       const ballTarget = document.querySelector("#ballTarget");
@@ -218,8 +205,8 @@
 
       let activeTarget = null;
       let videoPlaced = false;
-      let audioUnlocked = false;
       let appleSoundPlayed = false;
+      let appleSoundTimer = null;
 
       let appleIsSliced = false;
       let appleSliceAnimating = false;
@@ -232,6 +219,12 @@
 
       const tapRaycaster = new THREE.Raycaster();
       const tapPointer = new THREE.Vector2();
+
+      const worldUp = new THREE.Vector3(0, 1, 0);
+      const modelUp = new THREE.Vector3(0, 1, 0);
+      const targetWorldQuaternion = new THREE.Quaternion();
+      const targetInverseQuaternion = new THREE.Quaternion();
+      const upInTargetSpace = new THREE.Vector3();
 
       backgroundMusic.volume = 0.18;
       appleSound.volume = 1;
@@ -247,56 +240,68 @@
       }
 
       function playSound(sound) {
-        if (!audioUnlocked) return;
-
         sound.pause();
         sound.currentTime = 0;
 
-        sound.play().catch(() => {});
+        return sound.play();
       }
 
-      function playAppleSound() {
-        if (!audioUnlocked || appleSoundPlayed) return;
+      function startBackgroundMusic() {
+        if (!backgroundMusic.paused) return;
 
-        appleSoundPlayed = true;
-        playSound(appleSound);
-      }
-
-      function unlockAudio() {
-        if (audioUnlocked) return;
-
-        audioUnlocked = true;
-        soundUnlock.classList.add("hidden");
-
-        [sliceSound, appleSound].forEach((sound) => {
-          const originalVolume = sound.volume;
-
-          sound.volume = 0;
-
-          sound.play().then(() => {
-            sound.pause();
-            sound.currentTime = 0;
-            sound.volume = originalVolume;
-          }).catch(() => {
-            sound.volume = originalVolume;
-          });
+        backgroundMusic.play().catch(() => {
+          /*
+            Some mobile browsers require one user tap first.
+            The first screen tap retries this automatically.
+          */
         });
+      }
 
-        backgroundMusic.play().catch(() => {});
+      function clearAppleSoundTimer() {
+        if (appleSoundTimer) {
+          clearTimeout(appleSoundTimer);
+          appleSoundTimer = null;
+        }
+      }
 
-        if (activeTarget === 0) {
-          playAppleSound();
+      /*
+        Apple.mp3 plays exactly 2 seconds after the Apple target is found.
+      */
+      function scheduleAppleSound(delay = 2000) {
+        clearAppleSoundTimer();
+
+        if (appleSoundPlayed || activeTarget !== 0) return;
+
+        appleSoundTimer = setTimeout(() => {
+          if (activeTarget !== 0 || appleSoundPlayed) return;
+
+          playSound(appleSound)
+            .then(() => {
+              appleSoundPlayed = true;
+            })
+            .catch(() => {
+              /*
+                If automatic sound was blocked, the next screen tap retries it.
+              */
+              appleSoundPlayed = false;
+            });
+        }, delay);
+      }
+
+      function resumeAudioOnFirstTap() {
+        startBackgroundMusic();
+
+        if (activeTarget === 0 && !appleSoundPlayed) {
+          scheduleAppleSound(0);
         }
       }
 
       function placeMindARCameraVideo() {
         if (videoPlaced) return true;
 
-        const videos = Array.from(document.querySelectorAll("video"));
-
-        const cameraVideo = videos.find((video) => {
-          return video.srcObject !== null;
-        });
+        const cameraVideo = Array.from(
+          document.querySelectorAll("video")
+        ).find((video) => video.srcObject !== null);
 
         if (!cameraVideo) return false;
 
@@ -319,6 +324,7 @@
       scene.addEventListener("arReady", () => {
         showStatus("Point your camera at a book page…");
         placeMindARCameraVideo();
+        startBackgroundMusic();
       });
 
       scene.addEventListener("arError", () => {
@@ -331,24 +337,24 @@
         }
       }, 250);
 
-      const floorCorrection = new THREE.Quaternion();
-
-      floorCorrection.setFromEuler(
-        new THREE.Euler(-Math.PI / 2, 0, 0, "XYZ")
-      );
-
-      function applyOrientation(target, orientation) {
+      function applyStandingOrientation(target, orientation) {
         if (!target.object3D || !orientation.object3D) return;
 
-        const normal = new THREE.Vector3(0, 0, 1);
+        target.object3D.getWorldQuaternion(targetWorldQuaternion);
 
-        normal.applyQuaternion(target.object3D.quaternion);
+        targetInverseQuaternion
+          .copy(targetWorldQuaternion)
+          .invert();
 
-        if (Math.abs(normal.y) < 0.5) {
-          orientation.object3D.quaternion.identity();
-        } else {
-          orientation.object3D.quaternion.copy(floorCorrection);
-        }
+        upInTargetSpace
+          .copy(worldUp)
+          .applyQuaternion(targetInverseQuaternion)
+          .normalize();
+
+        orientation.object3D.quaternion.setFromUnitVectors(
+          modelUp,
+          upInTargetSpace
+        );
       }
 
       function showWholeApple() {
@@ -373,7 +379,7 @@
 
         appleSliceAnimating = true;
 
-        playSound(sliceSound);
+        playSound(sliceSound).catch(() => {});
 
         apple.setAttribute("visible", "false");
 
@@ -555,13 +561,15 @@
           showWholeApple();
         }
 
-        applyOrientation(appleTarget, appleOrientation);
-        playAppleSound();
+        applyStandingOrientation(appleTarget, appleOrientation);
+        scheduleAppleSound(2000);
       }
 
       function showBall() {
         activeTarget = 1;
         appleSoundPlayed = false;
+
+        clearAppleSoundTimer();
 
         apple.setAttribute("visible", "false");
         appleSlice.setAttribute("visible", "false");
@@ -572,7 +580,7 @@
 
         ball.setAttribute("visible", "true");
 
-        applyOrientation(ballTarget, ballOrientation);
+        applyStandingOrientation(ballTarget, ballOrientation);
       }
 
       appleTarget.addEventListener("targetFound", showApple);
@@ -586,23 +594,24 @@
 
         activeTarget = null;
         appleSoundPlayed = false;
+
+        clearAppleSoundTimer();
       });
 
       ballTarget.addEventListener("targetLost", () => {
         if (activeTarget !== 1) return;
 
         ball.setAttribute("visible", "false");
-
         activeTarget = null;
       });
 
       function trackingLoop() {
         if (activeTarget === 0) {
-          applyOrientation(appleTarget, appleOrientation);
+          applyStandingOrientation(appleTarget, appleOrientation);
         }
 
         if (activeTarget === 1) {
-          applyOrientation(ballTarget, ballOrientation);
+          applyStandingOrientation(ballTarget, ballOrientation);
         }
 
         requestAnimationFrame(trackingLoop);
@@ -652,7 +661,7 @@
       }
 
       scene.addEventListener("pointerdown", (event) => {
-        unlockAudio();
+        resumeAudioOnFirstTap();
 
         if (activeTarget === null || ballIsBouncing) return;
 
