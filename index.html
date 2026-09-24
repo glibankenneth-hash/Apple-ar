@@ -2,10 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+
   <meta
     name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
   >
+
   <meta name="apple-mobile-web-app-capable" content="yes">
 
   <title>AR Children's Book</title>
@@ -13,8 +15,36 @@
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
+  <!-- MediaPipe: recognizes a hand and its palm landmarks -->
+  <script type="module">
+    import {
+      FilesetResolver,
+      HandLandmarker
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+    window.createHandLandmarker = async () => {
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+
+      return HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          delegate: "GPU",
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+        },
+        runningMode: "VIDEO",
+        numHands: 1,
+        minHandDetectionConfidence: 0.55,
+        minHandPresenceConfidence: 0.55,
+        minTrackingConfidence: 0.55
+      });
+    };
+  </script>
+
   <style>
-    html, body {
+    html,
+    body {
       margin: 0;
       padding: 0;
       width: 100%;
@@ -131,6 +161,7 @@
       look-controls="enabled: false"
     ></a-camera>
 
+    <!-- Apple trigger -->
     <a-entity
       id="appleTarget"
       mindar-image-target="targetIndex: 0"
@@ -158,6 +189,7 @@
       </a-entity>
     </a-entity>
 
+    <!-- Ball trigger -->
     <a-entity
       id="ballTarget"
       mindar-image-target="targetIndex: 1"
@@ -205,6 +237,7 @@
 
       let activeTarget = null;
       let videoPlaced = false;
+
       let appleSoundPlayed = false;
       let appleSoundTimer = null;
 
@@ -214,6 +247,11 @@
       let ballIsBouncing = false;
       let ballReturnTimer = null;
 
+      let handLandmarker = null;
+      let handTrackingStarted = false;
+      let lastVideoTime = -1;
+      let lastHandSeenTime = 0;
+
       const ballMaterialStates = new Map();
       const tapStarts = new Map();
 
@@ -222,9 +260,19 @@
 
       const worldUp = new THREE.Vector3(0, 1, 0);
       const modelUp = new THREE.Vector3(0, 1, 0);
+
       const targetWorldQuaternion = new THREE.Quaternion();
       const targetInverseQuaternion = new THREE.Quaternion();
       const upInTargetSpace = new THREE.Vector3();
+
+      const cameraWorldPosition = new THREE.Vector3();
+      const targetWorldPosition = new THREE.Vector3();
+      const handWorldPosition = new THREE.Vector3();
+      const handLocalPosition = new THREE.Vector3();
+      const handDirection = new THREE.Vector3();
+      const handNdc = new THREE.Vector3();
+
+      let lastAnimationTime = performance.now();
 
       backgroundMusic.volume = 0.18;
       appleSound.volume = 1;
@@ -251,8 +299,8 @@
 
         backgroundMusic.play().catch(() => {
           /*
-            Some mobile browsers require one user tap first.
-            The first screen tap retries this automatically.
+            Mobile phones can block automatic audio.
+            The first screen tap retries it.
           */
         });
       }
@@ -264,9 +312,6 @@
         }
       }
 
-      /*
-        Apple.mp3 plays exactly 2 seconds after the Apple target is found.
-      */
       function scheduleAppleSound(delay = 2000) {
         clearAppleSoundTimer();
 
@@ -280,15 +325,12 @@
               appleSoundPlayed = true;
             })
             .catch(() => {
-              /*
-                If automatic sound was blocked, the next screen tap retries it.
-              */
               appleSoundPlayed = false;
             });
         }, delay);
       }
 
-      function resumeAudioOnFirstTap() {
+      function resumeAudio() {
         startBackgroundMusic();
 
         if (activeTarget === 0 && !appleSoundPlayed) {
@@ -318,24 +360,147 @@
         videoPlaced = true;
         hideStatus();
 
+        startHandTracking();
+
         return true;
       }
 
-      scene.addEventListener("arReady", () => {
-        showStatus("Point your camera at a book page…");
-        placeMindARCameraVideo();
-        startBackgroundMusic();
-      });
+      async function startHandTracking() {
+        if (handTrackingStarted) return;
 
-      scene.addEventListener("arError", () => {
-        showStatus("Camera could not start. Open this page in Chrome or Safari.");
-      });
-
-      const cameraCheck = setInterval(() => {
-        if (placeMindARCameraVideo()) {
-          clearInterval(cameraCheck);
+        /*
+          The MediaPipe module may still be downloading during page startup.
+        */
+        if (!window.createHandLandmarker) {
+          setTimeout(startHandTracking, 300);
+          return;
         }
-      }, 250);
+
+        handTrackingStarted = true;
+
+        try {
+          handLandmarker = await window.createHandLandmarker();
+          handTrackingLoop();
+        } catch (error) {
+          handTrackingStarted = false;
+          console.warn("Hand tracking could not start.", error);
+        }
+      }
+
+      /*
+        The palm center is calculated from:
+        wrist, index-finger base, and little-finger base.
+      */
+      function updateHandPosition(landmarks) {
+        const activeModel = getActiveModelElement();
+        const activeTargetElement = getActiveTargetElement();
+
+        if (!activeModel || !activeTargetElement || !scene.camera) return;
+
+        const palmX = (
+          landmarks[0].x +
+          landmarks[5].x +
+          landmarks[17].x
+        ) / 3;
+
+        const palmY = (
+          landmarks[0].y +
+          landmarks[5].y +
+          landmarks[17].y
+        ) / 3;
+
+        scene.camera.getWorldPosition(cameraWorldPosition);
+
+        activeTargetElement.object3D.getWorldPosition(
+          targetWorldPosition
+        );
+
+        const targetDistance = Math.max(
+          0.35,
+          cameraWorldPosition.distanceTo(targetWorldPosition)
+        );
+
+        handNdc.set(
+          palmX * 2 - 1,
+          -(palmY * 2 - 1),
+          0.5
+        );
+
+        handNdc.unproject(scene.camera);
+
+        handDirection
+          .subVectors(handNdc, cameraWorldPosition)
+          .normalize();
+
+        handWorldPosition
+          .copy(cameraWorldPosition)
+          .addScaledVector(handDirection, targetDistance);
+
+        activeModel.object3D.parent.updateWorldMatrix(true, false);
+
+        handLocalPosition.copy(handWorldPosition);
+
+        activeModel.object3D.parent.worldToLocal(handLocalPosition);
+
+        lastHandSeenTime = performance.now();
+      }
+
+      function handTrackingLoop() {
+        if (!handLandmarker) return;
+
+        const cameraVideo = document.querySelector(
+          "#mindar-camera-feed"
+        );
+
+        if (
+          cameraVideo &&
+          cameraVideo.readyState >= 2 &&
+          cameraVideo.currentTime !== lastVideoTime
+        ) {
+          lastVideoTime = cameraVideo.currentTime;
+
+          const result = handLandmarker.detectForVideo(
+            cameraVideo,
+            performance.now()
+          );
+
+          if (result.landmarks && result.landmarks.length > 0) {
+            updateHandPosition(result.landmarks[0]);
+          }
+        }
+
+        requestAnimationFrame(handTrackingLoop);
+      }
+
+      /*
+        Smoothly moves the object toward the hand in about 0.5 seconds.
+        When the hand disappears, it returns smoothly to position 0 0 0.
+      */
+      function updateObjectHandFollow(deltaSeconds) {
+        const activeModel = getActiveModelElement();
+
+        if (!activeModel || !activeModel.object3D.visible) return;
+
+        if (activeTarget === 1 && ballIsBouncing) return;
+        if (activeTarget === 0 && appleSliceAnimating) return;
+
+        const handIsVisible =
+          performance.now() - lastHandSeenTime < 250;
+
+        const smoothAmount = 1 - Math.exp(-8 * deltaSeconds);
+
+        if (handIsVisible) {
+          activeModel.object3D.position.lerp(
+            handLocalPosition,
+            smoothAmount
+          );
+        } else {
+          activeModel.object3D.position.lerp(
+            new THREE.Vector3(0, 0, 0),
+            smoothAmount
+          );
+        }
+      }
 
       function applyStandingOrientation(target, orientation) {
         if (!target.object3D || !orientation.object3D) return;
@@ -544,6 +709,40 @@
         ).length > 0;
       }
 
+      function getActiveTargetElement() {
+        if (activeTarget === 0) return appleTarget;
+        if (activeTarget === 1) return ballTarget;
+
+        return null;
+      }
+
+      function getActiveModelElement() {
+        if (activeTarget === 0) {
+          return appleIsSliced
+            ? appleSlice
+            : apple;
+        }
+
+        if (activeTarget === 1) {
+          return ball;
+        }
+
+        return null;
+      }
+
+      function getActiveRotationObject() {
+        if (activeTarget === 0) return appleRotation.object3D;
+        if (activeTarget === 1) return ballRotation.object3D;
+
+        return null;
+      }
+
+      function getActiveModelObject() {
+        const element = getActiveModelElement();
+
+        return element ? element.object3D : null;
+      }
+
       ball.addEventListener("model-loaded", () => {
         rememberBallMaterials();
       });
@@ -605,7 +804,14 @@
         activeTarget = null;
       });
 
-      function trackingLoop() {
+      function trackingLoop(currentTime) {
+        const deltaSeconds = Math.min(
+          (currentTime - lastAnimationTime) / 1000,
+          0.1
+        );
+
+        lastAnimationTime = currentTime;
+
         if (activeTarget === 0) {
           applyStandingOrientation(appleTarget, appleOrientation);
         }
@@ -614,10 +820,12 @@
           applyStandingOrientation(ballTarget, ballOrientation);
         }
 
+        updateObjectHandFollow(deltaSeconds);
+
         requestAnimationFrame(trackingLoop);
       }
 
-      trackingLoop();
+      requestAnimationFrame(trackingLoop);
 
       const pointers = new Map();
 
@@ -630,27 +838,6 @@
       let pinchStartDistance = 0;
       let pinchStartScale = BASE_SCALE;
 
-      function getActiveRotationObject() {
-        if (activeTarget === 0) return appleRotation.object3D;
-        if (activeTarget === 1) return ballRotation.object3D;
-
-        return null;
-      }
-
-      function getActiveModel() {
-        if (activeTarget === 0) {
-          return appleIsSliced
-            ? appleSlice.object3D
-            : apple.object3D;
-        }
-
-        if (activeTarget === 1) {
-          return ball.object3D;
-        }
-
-        return null;
-      }
-
       function currentPointerDistance() {
         const values = Array.from(pointers.values());
 
@@ -661,7 +848,7 @@
       }
 
       scene.addEventListener("pointerdown", (event) => {
-        resumeAudioOnFirstTap();
+        resumeAudio();
 
         if (activeTarget === null || ballIsBouncing) return;
 
@@ -689,7 +876,7 @@
 
           pinchStartDistance = currentPointerDistance();
 
-          const model = getActiveModel();
+          const model = getActiveModelObject();
 
           if (model) {
             pinchStartScale = model.scale.x;
@@ -727,7 +914,7 @@
 
           newScale = Math.max(0.3, Math.min(15, newScale));
 
-          const model = getActiveModel();
+          const model = getActiveModelObject();
 
           if (model) {
             model.scale.set(newScale, newScale, newScale);
